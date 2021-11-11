@@ -14,5 +14,6 @@
 """The module represents the query compiler level for the pandas storage format."""
 
 from .query_compiler import PandasQueryCompiler
+from .opportunistic_query_compiler import OpportunisticPandasQueryCompiler
 
-__all__ = ["PandasQueryCompiler"]
+__all__ = ["PandasQueryCompiler", "OpportunisticPandasQueryCompiler"]

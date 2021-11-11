@@ -106,6 +106,7 @@ class DataFrame(BasePandasDataset):
         copy=None,
         query_compiler=None,
     ):
+        print("!start of new df w qc=", id(query_compiler))
         Engine.subscribe(_update_engine)
         if isinstance(data, (DataFrame, Series)):
             self._query_compiler = data._query_compiler.copy()
@@ -175,6 +176,7 @@ class DataFrame(BasePandasDataset):
             self._query_compiler = from_pandas(pandas_df)._query_compiler
         else:
             self._query_compiler = query_compiler
+            print("!end of new df w qc=", id(query_compiler))
 
     def __repr__(self):
         """
@@ -2399,6 +2401,7 @@ class DataFrame(BasePandasDataset):
         elif isinstance(other, pandas.Series):
             other = other.reindex(self.index if not axis else self.columns)
         else:
+            print("!in df where")
             index = self.index if not axis else self.columns
             other = pandas.Series(other, index=index)
         query_compiler = self._query_compiler.where(
@@ -2430,12 +2433,16 @@ class DataFrame(BasePandasDataset):
         """
         if key not in self.keys():
             raise KeyError("{}".format(key))
+        print("!df._getitem_column")
         s = DataFrame(
             query_compiler=self._query_compiler.getitem_column_array([key])
         ).squeeze(axis=1)
+        print("!plan of s is")
+        s._query_compiler.print_plan()
         if isinstance(s, Series):
             s._parent = self
             s._parent_axis = 1
+        print("!returning from df._getitem_column")
         return s
 
     def __getattr__(self, key):

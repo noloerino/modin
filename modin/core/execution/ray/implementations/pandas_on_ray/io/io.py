@@ -13,7 +13,8 @@
 
 """The module holds the factory which performs I/O using pandas on Ray."""
 
-from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
+#from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
+from modin.core.storage_formats.pandas import OpportunisticPandasQueryCompiler
 from modin.core.execution.ray.generic.io import RayIO
 from modin.core.io import (
     CSVDispatcher,
@@ -46,10 +47,10 @@ class PandasOnRayIO(RayIO):
     """Factory providing methods for performing I/O operations using pandas as storage format on Ray as engine."""
 
     frame_cls = PandasOnRayDataframe
-    query_compiler_cls = PandasQueryCompiler
+    query_compiler_cls = OpportunisticPandasQueryCompiler
     build_args = dict(
         frame_partition_cls=PandasOnRayDataframePartition,
-        query_compiler_cls=PandasQueryCompiler,
+        query_compiler_cls=OpportunisticPandasQueryCompiler,
         frame_cls=PandasOnRayDataframe,
     )
     read_csv = type("", (RayTask, PandasCSVParser, CSVDispatcher), build_args).read

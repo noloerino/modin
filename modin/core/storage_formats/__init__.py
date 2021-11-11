@@ -14,9 +14,9 @@
 """Modin's functionality related to storage formats supported."""
 
 from .base import BaseQueryCompiler
-from .pandas import PandasQueryCompiler
+from .pandas import PandasQueryCompiler, OpportunisticPandasQueryCompiler
 
-__all__ = ["BaseQueryCompiler", "PandasQueryCompiler"]
+__all__ = ["BaseQueryCompiler", "PandasQueryCompiler", "OpportunisticPandasQueryCompiler"]
 try:
     from .pyarrow import PyarrowQueryCompiler  # noqa: F401
 except ImportError:

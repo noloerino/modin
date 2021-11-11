@@ -13,14 +13,13 @@
 
 from modin.core.storage_formats import (
     BaseQueryCompiler,
-    PandasQueryCompiler,
-    PyarrowQueryCompiler,
+    OpportunisticPandasQueryCompiler,
 )
 
 import pytest
 
 BASE_EXECUTION = BaseQueryCompiler
-EXECUTIONS = [PandasQueryCompiler, PyarrowQueryCompiler]
+EXECUTIONS = [OpportunisticPandasQueryCompiler]
 
 
 def test_base_abstract_methods():
