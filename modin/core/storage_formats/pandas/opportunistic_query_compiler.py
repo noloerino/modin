@@ -155,8 +155,9 @@ class QueryPlan:
     # TODO make this a dag or tree or something instead
     ops: Tuple[DfOp]
 
-    def __init__(self):
+    def __init__(self, df):
         self.ops = ()
+        self.df = df
 
     def pretty_str(self, idlevel=0):
         def indents():
