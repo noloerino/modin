@@ -2959,6 +2959,9 @@ class DataFrame(BasePandasDataset):
         except (KeyError, ValueError, TypeError):
             pass
         if isinstance(key, Series):
+            # TODO we should in reality be taking this branch, but since we're lazy,
+            # the isinstance check is getting messed up before the QC is even reached
+            # accordingly, we do need to produce a custom API-facing dataframe class
             return DataFrame(
                 query_compiler=self._query_compiler.getitem_array(key._query_compiler)
             )

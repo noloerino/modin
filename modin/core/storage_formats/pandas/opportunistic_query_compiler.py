@@ -86,38 +86,36 @@ class Comparison(Enum):
     def get_mask(df, comp, value):
         if value is None:
             if comp == Comparison.EQ:
-                return Map.register(pd.DataFrame.isna, dtypes=np.bool)
+                return df.map(lambda x: pd.DataFrame.isna(x, dtypes=np.bool))
+                # Map.register(pd.DataFrame.isna, dtypes=np.bool)
             elif comp == Comparison.NE:
-                return Map.register(pd.DataFrame.notna, dtypes=np.bool)
+                return df.map(lambda x: pd.DataFrame.notna(x))
+                # return Map.register(pd.DataFrame.notna, dtypes=np.bool)
             else:
                 raise NotImplementedError()
-        elif comp == Comparison.EQ:
-            return df == value
-        elif comp == Comparison.NE:
-            return df != value
-        elif comp == Comparison.LT:
-            return df < value
-        elif comp == Comparison.LTE:
-            return df <= value
-        elif comp == Comparison.GT:
-            return df > value
-        elif comp == Comparison.GTE:
-            return df >= value
+        raise NotImplementedError()
+        # elif comp == Comparison.EQ:
+        #     return df == value
+        # elif comp == Comparison.NE:
+        #     return df != value
+        # elif comp == Comparison.LT:
+        #     return df < value
+        # elif comp == Comparison.LTE:
+        #     return df <= value
+        # elif comp == Comparison.GT:
+        #     return df > value
+        # elif comp == Comparison.GTE:
+        #     return df >= value
 
 
 # Produces a dataframe where elements are T/F according to some comparison
-# Probably poorly named
 @dataclass
-class MaskOp(DfOp):
+class CompOp(DfOp):
     comp: Comparison
     value: Optional[int]
-
-    def __init__(self, comp, value):
-        self.comp = comp
-        self.value = value
     
     def apply(self, df):
-        print("*mask")
+        print(f"*mask on df {id(df)}")
         return Comparison.get_mask(df, self.comp, self.value)
 
 
@@ -125,29 +123,62 @@ class MaskOp(DfOp):
 # Probably poorly named
 @dataclass
 class FilterOp(DfOp):
+    """
+    Because the df.binary_op builder function expects another query compiler object, we need
+    to save the whole thing rather than just the plan
+    """
+    cond: "OpportunisticPandasQueryCompiler"
     """The other QueryPlan will produce this mask"""
-    mask: "QueryPlan"
+    # mask: "QueryPlan"
 
-    def __init__(self, mask):
-        self.mask = mask
+    def __init__(self, cond, other, **kwargs):
+        """
+        From pandas docs:
+            Entries where cond is False are replaced with corresponding value from other. If other
+            is callable, it is computed on the Series/DataFrame and should return scalar or
+            Series/DataFrame. The callable must not change input Series/DataFrame (though pandas
+            doesn’t check it).
+
+        i have no idea what `other` here is though
+        """
+        self.cond = cond
+        self.other = other
+        self.kwargs = kwargs
+
+    @property
+    def mask(self):
+        return self.cond._plan
 
     def apply(self, df):
-        print("*filter")
+        print(f"*filter on df {id(df)}")
         def where_builder_series(df, cond):
-            return df.where(cond, other)
-        return df.binary_op(where_builder_series, self.mask.execute(), join_type="left")
+            return df.where(cond, self.other, **self.kwargs)
+        cond_df = self.cond._plan.execute()
+        return df.binary_op(where_builder_series, cond_df, join_type="left")
 
 
 @dataclass
 class SelectCol(DfOp):
     colname: str
 
-    def __init__(self, colname):
-        self.colname = colname
+    def apply(self, df):
+        print(f"*select on df {id(df)}")
+        return df.mask(col_indices=[self.colname])
+
+
+# Masks a dataframe according to the provided row/column indices
+@dataclass
+class MaskOp(DfOp):
+    # idk the types
+    # row_numeric_idx: 
+    # col_numeric_idx:
+
+    def __init__(self, row_numeric_idx, col_numeric_idx):
+        self.row_numeric_idx = row_numeric_idx
+        self.col_numeric_idx = col_numeric_idx
 
     def apply(self, df):
-        print("*select")
-        return df.mask(col_indices=[self.colname])
+        return df.mask(row_numeric_idx=self.row_numeric_idx, col_numeric_idx=self.col_numeric_idx)
 
         
 @dataclass
@@ -189,9 +220,20 @@ class QueryPlan:
         return newplan
 
     def execute(self):
+        """
+        Returns a _modin_frame object (should be of type PandasOnRayDataFrame).
+        Before being presented to the user, to_pandas() should be called on this result.
+        """
         df = self.df
+        i = 0
         for op in self.ops:
+            old_id = id(df)
             df = op.apply(df)
+            # print(f"***iteration {i} w/ {op}: {old_id} -> {id(df)}")
+            # print("***new df:")
+            # print(df.to_pandas().head())
+            # print()
+            i += 1
         return df
 
 
@@ -261,14 +303,20 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
                 lambda df: self._plan.append_op(df, SelectCol(key[0]))
             )
 
+    def getitem_row_array(self, key):
+        self._print_op_start("getitem_row_array")
+        self._info("key is", key)
+        raise Exception()
+
     def notna(self):
         self._print_op_start("notna")
         return OpportunisticPandasQueryCompiler(
             self._modin_frame,
-            lambda df: self._plan.append_op(df, MaskOp(Comparison.NE, None))
+            lambda df: self._plan.append_op(df, CompOp(Comparison.NE, None))
         )
 
     def where(self, cond, other, **kwargs):
+        self._print_op_start("where")
         assert isinstance(
             cond, type(self)
         ), "Must have the same QueryCompiler subclass to perform this operation"
@@ -276,5 +324,13 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         assert isinstance(other, pd.Series), "other must be Series"
         return OpportunisticPandasQueryCompiler(
             self._modin_frame,
-            lambda df: self._plan.append_op(df, FilterOp(cond._plan))
+            lambda df: self._plan.append_op(df, FilterOp(cond, other, **kwargs))
         )
+
+    def view(self, index=None, columns=None):
+        qc = OpportunisticPandasQueryCompiler(
+            self._modin_frame,
+            lambda df: self._plan.append_op(df, MaskOp(index, columns))
+        )
+        self._info("plan from view:", qc._plan.pretty_str())
+        return qc
