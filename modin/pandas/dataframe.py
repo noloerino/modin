@@ -2958,10 +2958,20 @@ class DataFrame(BasePandasDataset):
                 return self._getitem_column(key)
         except (KeyError, ValueError, TypeError):
             pass
+        # TEMPORARY HACK:
+        # since we're lazy, the isinstance check is getting messed up before the QC
+        # is even invoked
+        # accordingly, we need to produce a custom API-facing dataframe class
+        # so these isinstance things don't matter
+        if isinstance(key, str):
+            # originally else branch
+            return self._getitem_column(key)
+        else:
+            return DataFrame(
+                query_compiler=self._query_compiler.getitem_array(key._query_compiler)
+            )
+        """
         if isinstance(key, Series):
-            # TODO we should in reality be taking this branch, but since we're lazy,
-            # the isinstance check is getting messed up before the QC is even reached
-            # accordingly, we do need to produce a custom API-facing dataframe class
             return DataFrame(
                 query_compiler=self._query_compiler.getitem_array(key._query_compiler)
             )
@@ -2974,6 +2984,7 @@ class DataFrame(BasePandasDataset):
             # return self._getitem_multilevel(key)
         else:
             return self._getitem_column(key)
+        """
 
     # Persistance support methods - BEGIN
     @classmethod

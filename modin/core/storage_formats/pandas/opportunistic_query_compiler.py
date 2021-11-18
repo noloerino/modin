@@ -172,13 +172,17 @@ class MaskOp(DfOp):
     # idk the types
     # row_numeric_idx: 
     # col_numeric_idx:
-
-    def __init__(self, row_numeric_idx, col_numeric_idx):
-        self.row_numeric_idx = row_numeric_idx
-        self.col_numeric_idx = col_numeric_idx
+    """
+    (hopefully) temporary hack: this QC produces a DF that's a 1-d bool array, and
+    we select every row where this DF is true and drop rows that are false
+    """
+    rows: "OpportunisticPandasQueryCompiler"
 
     def apply(self, df):
-        return df.mask(row_numeric_idx=self.row_numeric_idx, col_numeric_idx=self.col_numeric_idx)
+        # similar to PandasQueryCompiler.getitem_array
+        mask_rows = self.rows._plan.execute().to_pandas().squeeze(axis=1)
+        key = pd.RangeIndex(len(df.index))[mask_rows]
+        return df.mask(row_numeric_idx=key)
 
         
 @dataclass
@@ -289,7 +293,10 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
     def getitem_array(self, key):
         self._print_op_start("getitem_array")
         self._info("key is", key)
-        raise Exception()
+        # assume this is a bool_indexer, which means rows get dropped
+        # ignore checks for now :/
+        assert isinstance(key, type(self)), "getitem_array key must also be the same QueryCompiler"
+        return self.getitem_row_array(key)
 
     def getitem_column_array(self, key, numeric=False):
         self._print_op_start("getitem_column_array")
@@ -306,7 +313,11 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
     def getitem_row_array(self, key):
         self._print_op_start("getitem_row_array")
         self._info("key is", key)
-        raise Exception()
+        assert isinstance(key, type(self)), "getitem_array key must also be the same QueryCompiler"
+        return OpportunisticPandasQueryCompiler(
+            self._modin_frame,
+            lambda df: self._plan.append_op(df, MaskOp(key))
+        )
 
     def notna(self):
         self._print_op_start("notna")
@@ -326,11 +337,3 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
             self._modin_frame,
             lambda df: self._plan.append_op(df, FilterOp(cond, other, **kwargs))
         )
-
-    def view(self, index=None, columns=None):
-        qc = OpportunisticPandasQueryCompiler(
-            self._modin_frame,
-            lambda df: self._plan.append_op(df, MaskOp(index, columns))
-        )
-        self._info("plan from view:", qc._plan.pretty_str())
-        return qc
