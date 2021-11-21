@@ -447,7 +447,6 @@ class PandasDataframe(object):
         The same rule applied to `col_indices` and `col_numeric_idx`.
         """
         # Check on all possible ranges
-        print("!in df mask, id=", id(self))
         if isinstance(row_numeric_idx, slice) and (
             row_numeric_idx == slice(None) or row_numeric_idx == slice(0, None)
         ):

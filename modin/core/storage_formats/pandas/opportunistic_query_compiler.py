@@ -24,11 +24,17 @@ from modin.core.dataframe.algebra import (
 from .query_compiler import PandasQueryCompiler
 
 
-@dataclass
+@dataclass(frozen=True)
 class DfOp:
     def apply(self, df):
         """Apply this operation to the dataframe in question."""
         pass
+
+    _verbose = False
+
+    def _info(self, msg, *args):
+        if self._verbose:
+            print(msg, *args)
 
 
 # Assume for now that all dataframes are immutable, so we can just maintain a global store of histograms
@@ -109,19 +115,19 @@ class Comparison(Enum):
 
 
 # Produces a dataframe where elements are T/F according to some comparison
-@dataclass
+@dataclass(frozen=True)
 class CompOp(DfOp):
     comp: Comparison
     value: Optional[int]
     
     def apply(self, df):
-        print(f"*mask on df {id(df)}")
+        self._info(f"*mask on df {id(df)}")
         return Comparison.get_mask(df, self.comp, self.value)
 
 
 # Filters elements of a dataframe based on some mask described by a QueryPlan
 # Probably poorly named
-@dataclass
+@dataclass(frozen=True)
 class FilterOp(DfOp):
     """
     Because the df.binary_op builder function expects another query compiler object, we need
@@ -150,24 +156,24 @@ class FilterOp(DfOp):
         return self.cond._plan
 
     def apply(self, df):
-        print(f"*filter on df {id(df)}")
+        self._info(f"*filter on df {id(df)}")
         def where_builder_series(df, cond):
             return df.where(cond, self.other, **self.kwargs)
         cond_df = self.cond._plan.execute()
         return df.binary_op(where_builder_series, cond_df, join_type="left")
 
 
-@dataclass
+@dataclass(frozen=True)
 class SelectCol(DfOp):
     colname: str
 
     def apply(self, df):
-        print(f"*select on df {id(df)}")
+        self._info(f"*select on df {id(df)}")
         return df.mask(col_indices=[self.colname])
 
 
 # Masks a dataframe according to the provided row/column indices
-@dataclass
+@dataclass(frozen=True)
 class MaskOp(DfOp):
     # idk the types
     # row_numeric_idx: 
@@ -184,6 +190,7 @@ class MaskOp(DfOp):
         key = pd.RangeIndex(len(df.index))[mask_rows]
         return df.mask(row_numeric_idx=key)
 
+_plans = {} # maps QueryPlan hash to executed result
         
 @dataclass
 class QueryPlan:
@@ -193,6 +200,9 @@ class QueryPlan:
     def __init__(self, df):
         self.ops = ()
         self.df = df
+
+    def __hash__(self):
+        return hash((self.ops, id(self.df)))
 
     def pretty_str(self, idlevel=0):
         def indents():
@@ -228,16 +238,19 @@ class QueryPlan:
         Returns a _modin_frame object (should be of type PandasOnRayDataFrame).
         Before being presented to the user, to_pandas() should be called on this result.
         """
+        if self in _plans:
+            return _plans[self]
         df = self.df
         i = 0
         for op in self.ops:
-            old_id = id(df)
+            # old_id = id(df)
             df = op.apply(df)
-            # print(f"***iteration {i} w/ {op}: {old_id} -> {id(df)}")
-            # print("***new df:")
-            # print(df.to_pandas().head())
-            # print()
+            # self._info(f"***iteration {i} w/ {op}: {old_id} -> {id(df)}")
+            # self._info("***new df:")
+            # self._info(df.to_pandas().head())
+            # self._info()
             i += 1
+        _plans[self] = df
         return df
 
 
@@ -271,7 +284,7 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
 
     lazy_execution = True
 
-    verbose = True
+    _verbose = False
 
     def __str__(self):
         return f"OpportunisticPandasQueryCompiler({self._plan})"
@@ -283,11 +296,11 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         print(self._plan)
 
     def _print_op_start(self, msg):
-        if self.verbose:
+        if self._verbose:
             print(f"!!{msg} on qc")
 
     def _info(self, *args):
-        if self.verbose:
+        if self._verbose:
             print("!!!", *args)
 
     def getitem_array(self, key):
@@ -320,6 +333,7 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         )
 
     def notna(self):
+
         self._print_op_start("notna")
         return OpportunisticPandasQueryCompiler(
             self._modin_frame,
