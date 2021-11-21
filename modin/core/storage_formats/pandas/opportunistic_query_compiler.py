@@ -50,6 +50,8 @@ def histogram(df, bins=10): # Technically, should key the dict on #bins too, but
     
     The count of null/NaN fields in each column is also stored.
     """
+    print("placeholder for statistics collection on modin df with id", id(df))
+    """
     for colname, tpe in df.dtypes.iteritems():
         if "float" in str(tpe) or "int" in str(tpe):
             hist_df = pd.DataFrame(index=["none", "size"
@@ -68,6 +70,21 @@ def histogram(df, bins=10): # Technically, should key the dict on #bins too, but
             # ignore the bound for the "none" column
             hist_df = hist_df.join(pd.DataFrame({"counts": nacol}), how="left")
             histograms[id(col)] = hist_df
+    """
+
+
+_stats_queue = []
+
+def run_compute_stats():
+    """
+    Attempts to run background statistics collection on the next dataframe
+    in _stats_queue.
+    """
+    if _stats_queue:
+        histogram(_stats_queue.pop(0))
+
+def _queue_df(df):
+    _stats_queue.append(df)
 
 
 class Comparison(Enum):

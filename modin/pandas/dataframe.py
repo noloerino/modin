@@ -37,6 +37,7 @@ import warnings
 from modin.error_message import ErrorMessage
 from modin.utils import _inherit_docstrings, to_pandas, hashable
 from modin.config import Engine, IsExperimental, PersistentPickle
+from modin.core.storage_formats.pandas import _queue_df
 from .utils import (
     from_pandas,
     from_non_pandas,
@@ -187,6 +188,7 @@ class DataFrame(BasePandasDataset):
         else:
             self._query_compiler = query_compiler
             _info("end of new df w qc=", id(query_compiler))
+        _queue_df(self)
 
     def __repr__(self):
         """
