@@ -2450,7 +2450,7 @@ class DataFrame(BasePandasDataset):
             query_compiler=self._query_compiler.getitem_column_array([key])
         ).squeeze(axis=1)
         _info("plan of s is")
-        s._query_compiler.print_plan()
+        # s._query_compiler.print_plan()
         if isinstance(s, Series):
             s._parent = self
             s._parent_axis = 1

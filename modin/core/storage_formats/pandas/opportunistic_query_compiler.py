@@ -41,7 +41,7 @@ class DfOp:
 # In the future, we can store a histogram dataframe as a member of each dataframe, then invalidate it when
 # an in-place updating function is invoked
 # TODO do something for non-integer types?
-histograms = {} # Maps id(df): histogram
+histograms = {} # Maps hash((id(df), colname)): histogram
 
 def histogram(df, bins=10): # Technically, should key the dict on #bins too, but whatever
     """
@@ -50,13 +50,13 @@ def histogram(df, bins=10): # Technically, should key the dict on #bins too, but
     
     The count of null/NaN fields in each column is also stored.
     """
-    print("placeholder for statistics collection on modin df with id", id(df))
-    """
     for colname, tpe in df.dtypes.iteritems():
+        if hash((id(df), colname)) in histograms:
+            continue
         if "float" in str(tpe) or "int" in str(tpe):
             hist_df = pd.DataFrame(index=["none", "size"
                                  ] + [f"bin{i}" for i in range(bins)] + [f"__lbound_{i}" for i in range(bins + 1)])
-            col = df[colname]
+            col = df._getitem_column(colname)._query_compiler._plan.execute_to_pandas().squeeze(axis=1)
             notna_mask = col.notna()
             nacol = pd.Series({"none": col.isna().sum()})
             if notna_mask.any():
@@ -69,8 +69,11 @@ def histogram(df, bins=10): # Technically, should key the dict on #bins too, but
             nacol = nacol.append(binned).append(pd.Series({"size": df.size}))
             # ignore the bound for the "none" column
             hist_df = hist_df.join(pd.DataFrame({"counts": nacol}), how="left")
-            histograms[id(col)] = hist_df
-    """
+            histograms[hash((id(df), colname))] = hist_df
+
+
+def get_histogram(df, colname):
+    return histograms[hash((id(df), colname))]
 
 
 _stats_queue = []
@@ -82,6 +85,7 @@ def run_compute_stats():
     """
     if _stats_queue:
         histogram(_stats_queue.pop(0))
+    # print(histograms)
 
 def _queue_df(df):
     _stats_queue.append(df)
@@ -203,12 +207,19 @@ class MaskOp(DfOp):
 
     def apply(self, df):
         # similar to PandasQueryCompiler.getitem_array
-        mask_rows = self.rows._plan.execute().to_pandas().squeeze(axis=1)
+        mask_rows = self.rows._plan.execute_to_pandas().squeeze(axis=1)
         key = pd.RangeIndex(len(df.index))[mask_rows]
         return df.mask(row_numeric_idx=key)
 
-_plans = {} # maps QueryPlan hash to executed result
-        
+# maps QueryPlan hash to executed result
+# this cannot be stored as just a field on the class because we might construct
+# the same queryplan from 2 different instances
+# values are pairs of (result_df, result_pandas_df), where pandas_df may be none
+_plans = {}
+
+# map of QueryPlan -> (QueryPlan, int), where second int is cost
+_bestplans = {}
+
 @dataclass
 class QueryPlan:
     # TODO make this a dag or tree or something instead
@@ -250,13 +261,41 @@ class QueryPlan:
         newplan.ops = self.ops
         return newplan
 
+    def optimize(self):
+        """
+        Returns a new QueryPlan object that is optimized based on the dynamic programming algorithm
+        given in figure 13.7 of Abraham/Silberschatz.
+        """
+        """
+        procedure FindBestPlan(S)
+            if (bestplan[S].cost != infinity) /* bestplan[S] already computed */
+                return bestplan[S]
+            if (S contains only 1 relation)
+                set bestplan[S].plan and bestplan[S].cost based on best way of accessing S
+            else for each non-empty subset S1 of S such that S1 != S
+                P1 = FindBestPlan(S1)
+                P2 = FindBestPlan(S - S1)
+                A = best algorithm for joining results of P1 and P2
+                cost = P1.cost + P2.cost + cost o fA
+                if cost < bestplan[S].cost
+                    bestplan[S].cost = cost
+                    bestplan[S].plan = "execute P1.plan; execute P2.plan; join results of P1 and
+                                        P2 using A"
+            return bestplan[S]
+        """
+        ...
+
     def execute(self):
         """
         Returns a _modin_frame object (should be of type PandasOnRayDataFrame).
-        Before being presented to the user, to_pandas() should be called on this result.
+        Memoizes the result.
+
+        If being presented to the user, use execute_to_pandas() instead, which
+        will attempt to check if the to_pandas conversion was cached.
         """
         if self in _plans:
-            return _plans[self]
+            print("cached non-pd")
+            return _plans[self][0]
         df = self.df
         i = 0
         for op in self.ops:
@@ -267,13 +306,24 @@ class QueryPlan:
             # self._info(df.to_pandas().head())
             # self._info()
             i += 1
-        _plans[self] = df
+        _plans[self] = (df, None)
         return df
 
+    def execute_to_pandas(self):
+        if self not in _plans:
+            # memoizes _plans[self][0]
+            self.execute()
+        if _plans[self][1] is not None:
+            print("using cached pd")
+            return _plans[self][1]
+        result_df = _plans[self][0]
+        df_pandas = result_df.to_pandas()
+        _plans[self] = (result_df, df_pandas)
+        return df_pandas
 
 class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
     """
-    Opportunistic query compiler for the pandas storage format.gg
+    Opportunistic query compiler for the pandas storage format.
 
     Whereas ``PandasQueryCompiler`` translates common query compiler API calls
     directly into DataFrame Algebra operations, this instead returns a query plan.
