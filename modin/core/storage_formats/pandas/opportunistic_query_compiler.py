@@ -8,7 +8,7 @@ must be executed in order to produce a DataFrame.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Tuple, Optional
+from typing import Dict, Tuple, Optional
 import numpy as np
 import pandas as pd
 
@@ -43,6 +43,9 @@ class DfOp:
 # TODO do something for non-integer types?
 histograms = {} # Maps hash((id(df), colname)): histogram
 
+def hist_key(df, col_name):
+    return hash((id(df), colname))
+
 def histogram(df, bins=10): # Technically, should key the dict on #bins too, but whatever
     """
     Computes and caches a dataframe containing bin information for each numeric column in df.
@@ -69,11 +72,11 @@ def histogram(df, bins=10): # Technically, should key the dict on #bins too, but
             nacol = nacol.append(binned).append(pd.Series({"size": df.size}))
             # ignore the bound for the "none" column
             hist_df = hist_df.join(pd.DataFrame({"counts": nacol}), how="left")
-            histograms[hash((id(df), colname))] = hist_df
+            histograms[hist_key(df, colname)] = hist_df
 
 
 def get_histogram(df, colname):
-    return histograms[hash((id(df), colname))]
+    return histograms[hist_key(df, colname)]
 
 
 _stats_queue = []
@@ -95,14 +98,14 @@ class Comparison(Enum):
     EQ = 0
     NE = 1
     LT = 2
-    LTE = 3
+    LE = 3
     GT = 4
-    GTE = 5
+    GE = 5
     
     @staticmethod
-    def size_estimate(df, comp, value):
+    def size_estimate(df, colname, comp, value):
         if value is None and comp == Comparison.NE:
-            hist = histograms[id(df)]
+            hist = histograms[hist_key(df, colname)]
             size = hist["size"]
             na_size = hist["none"]
             return 1 - (na_size / size)
@@ -120,30 +123,34 @@ class Comparison(Enum):
                 # return Map.register(pd.DataFrame.notna, dtypes=np.bool)
             else:
                 raise NotImplementedError()
+        # Assume "value" is numeric, rather than another dataframe
+        elif comp == Comparison.EQ:
+            return df.map(lambda x: pd.DataFrame.eq(x, value))
+        elif comp == Comparison.NE:
+            return df.map(lambda x: pd.DataFrame.ne(x, value))
+        elif comp == Comparison.LT:
+            return df.map(lambda x: pd.DataFrame.lt(x, value))
+        elif comp == Comparison.LE:
+            return df.map(lambda x: pd.DataFrame.le(x, value))
+        elif comp == Comparison.GT:
+            return df.map(lambda x: pd.DataFrame.gt(x, value))
+        elif comp == Comparison.GE:
+            return df.map(lambda x: pd.DataFrame.ge(x, value))
         raise NotImplementedError()
-        # elif comp == Comparison.EQ:
-        #     return df == value
-        # elif comp == Comparison.NE:
-        #     return df != value
-        # elif comp == Comparison.LT:
-        #     return df < value
-        # elif comp == Comparison.LTE:
-        #     return df <= value
-        # elif comp == Comparison.GT:
-        #     return df > value
-        # elif comp == Comparison.GTE:
-        #     return df >= value
-
 
 # Produces a dataframe where elements are T/F according to some comparison
 @dataclass(frozen=True)
 class CompOp(DfOp):
     comp: Comparison
     value: Optional[int]
+    _kwargs: Dict[str, object] # unused for now
     
     def apply(self, df):
         self._info(f"*mask on df {id(df)}")
         return Comparison.get_mask(df, self.comp, self.value)
+
+    def __hash__(self):
+        return hash((self.comp, self.value))
 
 
 # Filters elements of a dataframe based on some mask described by a QueryPlan
@@ -362,9 +369,15 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
     def print_plan(self):
         print(self._plan)
 
+    def _new_qc_with_op(self, op):
+        return OpportunisticPandasQueryCompiler(
+            self._modin_frame,
+            lambda df: self._plan.append_op(df, op)
+        )
+
     def _print_op_start(self, msg):
         if self._verbose:
-            print(f"!!{msg} on qc")
+            print(f"!! {msg} on qc")
 
     def _info(self, *args):
         if self._verbose:
@@ -375,7 +388,7 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         self._info("key is", key)
         # assume this is a bool_indexer, which means rows get dropped
         # ignore checks for now :/
-        assert isinstance(key, type(self)), "getitem_array key must also be the same QueryCompiler"
+        assert isinstance(key, type(self)), "getitem_array key must also be the same QueryCompiler type"
         return self.getitem_row_array(key)
 
     def getitem_column_array(self, key, numeric=False):
@@ -385,27 +398,41 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         else:
             self._info("getitem with key:", key)
             assert len(key) == 1 and type(key[0]) == str, "only colnames allowed for now"
-            return OpportunisticPandasQueryCompiler(
-                self._modin_frame,
-                lambda df: self._plan.append_op(df, SelectCol(key[0]))
-            )
+            return self._new_qc_with_op(SelectCol(key[0]))
 
     def getitem_row_array(self, key):
         self._print_op_start("getitem_row_array")
         self._info("key is", key)
-        assert isinstance(key, type(self)), "getitem_array key must also be the same QueryCompiler"
-        return OpportunisticPandasQueryCompiler(
-            self._modin_frame,
-            lambda df: self._plan.append_op(df, MaskOp(key))
-        )
+        assert isinstance(key, type(self)), "getitem_row_array key must also be the same QueryCompiler"
+        return self._new_qc_with_op(MaskOp(key))
 
     def notna(self):
-
         self._print_op_start("notna")
-        return OpportunisticPandasQueryCompiler(
-            self._modin_frame,
-            lambda df: self._plan.append_op(df, CompOp(Comparison.NE, None))
-        )
+        return self._new_qc_with_op(CompOp(Comparison.NE, None))
+
+    def lt(self, other, **kwargs):
+        self._print_op_start("lt")
+        return self._new_qc_with_op(CompOp(Comparison.LT, other, kwargs))
+
+    def le(self, other, **kwargs):
+        self._print_op_start("le")
+        return self._new_qc_with_op(CompOp(Comparison.LE, other, kwargs))
+
+    def gt(self, other, **kwargs):
+        self._print_op_start("gt")
+        return self._new_qc_with_op(CompOp(Comparison.GT, other, kwargs))
+
+    def ge(self, other, **kwargs):
+        self._print_op_start("ge")
+        return self._new_qc_with_op(CompOp(Comparison.GE, other, kwargs))
+
+    def eq(self, other, **kwargs):
+        self._print_op_start("eq")
+        return self._new_qc_with_op(CompOp(Comparison.EQ, other, kwargs))
+
+    def ne(self, other, **kwargs):
+        self._print_op_start("ne")
+        return self._new_qc_with_op(CompOp(Comparison.NE, other, kwargs))
 
     def where(self, cond, other, **kwargs):
         self._print_op_start("where")
@@ -414,7 +441,4 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         ), "Must have the same QueryCompiler subclass to perform this operation"
         # "else" branch of PandasQueryCompiler.where
         assert isinstance(other, pd.Series), "other must be Series"
-        return OpportunisticPandasQueryCompiler(
-            self._modin_frame,
-            lambda df: self._plan.append_op(df, FilterOp(cond, other, **kwargs))
-        )
+        return self._new_qc_with_op(FilterOp(cond, other, **kwargs))
