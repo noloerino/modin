@@ -104,6 +104,13 @@ def get_histogram(df, colname):
 _stats_queue = []
 
 class _StatsManager:
+    def has_next(self):
+        return len(_stats_queue) > 0
+
+    def compute_next(self):
+        if _stats_queue:
+            histogram(_stats_queue.pop(0))
+
     def compute_all(self):
         """
         Attempts to run background statistics collection on the next dataframe
