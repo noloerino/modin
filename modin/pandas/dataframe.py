@@ -56,7 +56,7 @@ _verbose = False
 # this is called before self.query_compiler is set
 def _info(msg, *args):
     if _verbose:
-        print("!" + msg, *args)
+        print("! " + msg, *args)
 
 
 @_inherit_docstrings(
@@ -117,7 +117,7 @@ class DataFrame(BasePandasDataset):
         copy=None,
         query_compiler=None,
     ):
-        _info("start of new df w qc=", id(query_compiler))
+        _info("start of new df=", id(self), "w/ qc=", id(query_compiler))
         Engine.subscribe(_update_engine)
         if isinstance(data, (DataFrame, Series)):
             self._query_compiler = data._query_compiler.copy()
@@ -185,6 +185,7 @@ class DataFrame(BasePandasDataset):
                 data=data, index=index, columns=columns, dtype=dtype, copy=copy
             )
             self._query_compiler = from_pandas(pandas_df)._query_compiler
+            _info("end of new df (w/o old qc) w/ new qc=", id(query_compiler))
         else:
             self._query_compiler = query_compiler
             _info("end of new df w qc=", id(query_compiler))

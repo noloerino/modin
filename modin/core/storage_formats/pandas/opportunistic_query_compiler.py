@@ -6,7 +6,7 @@ objects, this class instead produces an object containing a query _plan_, which
 must be executed in order to produce a DataFrame.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Tuple, Optional
 import numpy as np
@@ -30,6 +30,9 @@ class DfOp:
         """Apply this operation to the dataframe in question."""
         pass
 
+    def other(self):
+        return None
+
     _verbose = False
 
     def _info(self, msg, *args):
@@ -41,57 +44,97 @@ class DfOp:
 # In the future, we can store a histogram dataframe as a member of each dataframe, then invalidate it when
 # an in-place updating function is invoked
 # TODO do something for non-integer types?
-histograms = {} # Maps hash((id(df), colname)): histogram
+_histograms = {} # Maps hash((id(df), colname)): histogram
 
-def hist_key(df, col_name):
-    return hash((id(df), colname))
+def hist_key(df, colname):
+    return ((id(df), colname))
 
-def histogram(df, bins=10): # Technically, should key the dict on #bins too, but whatever
+def histogram(df, maxbins=10):
     """
     Computes and caches a dataframe containing bin information for each numeric column in df.
     Every column is treated as its own dataframe.
     
     The count of null/NaN fields in each column is also stored.
+
+    Fields in resulting series:
+    - bin_count: number of bins
+    - none: number of None/NaN values
+    - size: the number of items in the dataframe
+    - count_{i}: number of values in ith bin
+    - distinct_{i}: the number of distinct values in ith bin
+    - lbound_{i}: left (lower) bound for ith bin
+                  lbound_0 is the minimum
+                  lbound_{bin_count} is the maximum
+
+    TODO combine series for cols of the same df into a single dataframe
     """
     for colname, tpe in df.dtypes.iteritems():
-        if hash((id(df), colname)) in histograms:
+        mdf = df._query_compiler._modin_frame
+        hk = hist_key(mdf, colname)
+        if hk in _histograms:
             continue
         if "float" in str(tpe) or "int" in str(tpe):
-            hist_df = pd.DataFrame(index=["none", "size"
-                                 ] + [f"bin{i}" for i in range(bins)] + [f"__lbound_{i}" for i in range(bins + 1)])
-            col = df._getitem_column(colname)._query_compiler._plan.execute_to_pandas().squeeze(axis=1)
+            col = df._getitem_column(colname)._query_compiler._plan.execute().squeeze(axis=1)
+            bins = min(maxbins, col.size)
+            bin_labels = [f"count_{i}" for i in range(bins)]
+            distinct_labels = [f"distinct_{i}" for i in range(bins)]
+            bound_labels = [f"lbound_{i}" for i in range(bins + 1)]
+            hist_df = pd.DataFrame(index=["none", "items", "bin_count"] + bin_labels + distinct_labels + bound_labels)
             notna_mask = col.notna()
-            nacol = pd.Series({"none": col.isna().sum()})
+            nacol = pd.Series({"bin_count": bins, "none": col.isna().sum(), "items": col.size})
             if notna_mask.any():
-                vals, bounds = pd.cut(col[notna_mask].values, bins=bins, retbins=True, labels=[f"bin{i}" for i in range(bins)])
-                binned = pd.Series(vals.value_counts()).append(pd.Series({f"__lbound_{i}": b for i, b in enumerate(bounds)}))
+                vals, bounds = pd.cut(col[notna_mask].values, bins=bins, retbins=True, labels=bin_labels, include_lowest=True)
+                # TODO find some way to avoid doing a second pass for unique
+                distinct = pd.cut(pd.unique(col[notna_mask].values), bins=bounds, labels=distinct_labels)
+                binned = pd.Series(vals.value_counts()).append(
+                    pd.Series(distinct.value_counts()).append(
+                    pd.Series({l: b for l, b in zip(bound_labels, bounds)})))
             else:
-                binned = pd.Series({f"bin{i}": 0 for i in range(bins)}).append(
-                    pd.Series({f"__lbound_{i}": 0 for i in range(bins + 1)}))
-            # Need to call pd.Series again in order to wrap the vanilla pandas frame
-            nacol = nacol.append(binned).append(pd.Series({"size": df.size}))
+                binned = pd.Series({l: 0 for l in bin_labels + distinct_labels + bound_labels})
+            nacol = nacol.append(binned)
             # ignore the bound for the "none" column
             hist_df = hist_df.join(pd.DataFrame({"counts": nacol}), how="left")
-            histograms[hist_key(df, colname)] = hist_df
+            _histograms[hk] = hist_df
 
 
 def get_histogram(df, colname):
-    return histograms[hist_key(df, colname)]
+    return _histograms[hist_key(df, colname)]
 
 
 _stats_queue = []
 
-def run_compute_stats():
-    """
-    Attempts to run background statistics collection on the next dataframe
-    in _stats_queue.
-    """
-    if _stats_queue:
-        histogram(_stats_queue.pop(0))
-    # print(histograms)
+class _StatsManager:
+    def compute_all(self):
+        """
+        Attempts to run background statistics collection on the next dataframe
+        in _stats_queue.
+        """
+        # if _stats_queue:
+        #     histogram(_stats_queue.pop(0))
+        while _stats_queue:
+            histogram(_stats_queue.pop(0))
+            # histogram(_stats_queue.pop(0))
+        # print(_stats_queue)
+        # print(_histograms)
+
+    def get_all(self):
+        return _histograms
+
+    def clear_all(self):
+        global _histograms
+        global _stats_queue
+        del _histograms
+        del _stats_queue
+        _histograms = {}
+        _stats_queue = []
+
+stats_manager = _StatsManager() # singleton, exposed to API
 
 def _queue_df(df):
-    _stats_queue.append(df)
+    # only queue the dataframe if it was constructed by the user (not the
+    # query compiler), meaning it should have no ops
+    if not df._query_compiler._plan.ops:
+        _stats_queue.append(df)
 
 
 class Comparison(Enum):
@@ -101,19 +144,84 @@ class Comparison(Enum):
     LE = 3
     GT = 4
     GE = 5
-    
-    @staticmethod
-    def size_estimate(df, colname, comp, value):
-        if value is None and comp == Comparison.NE:
-            hist = histograms[hist_key(df, colname)]
-            size = hist["size"]
+
+    def size_estimate(self, df, colname, value):
+        """
+        Returns a cardinality estimate for this comparison on a particular
+        column of the provided dataframe.
+
+        Raises KeyError if the histogram has not yet been generated.
+        TODO return from uniform distribution instead?
+
+        Raises NotImplementedError if, well, you know, estimation isn't implemented
+        for the operation.
+        """
+        hist = _histograms[hist_key(df, colname)]["counts"]
+        comp = self
+        if value is None:
+            size = hist["items"]
             na_size = hist["none"]
-            return 1 - (na_size / size)
-        else:
-            raise NotImplementedError()
+            if comp == Comparison.NE:
+                return size - na_size
+            elif comp == Comparison.EQ:
+                return na_size
+            else:
+                raise NotImplementedError()
+        bins = int(hist["bin_count"])
+        if bins == 0:
+            return
+        items = hist["items"] - hist["none"]
+        maxval = hist[f"lbound_{bins}"]
+        minval = hist[f"lbound_0"]
+        binid = -1
+        # probaly should binary search instead, but it's just 10 elements
+        for i in range(bins):
+            lb = hist[f"lbound_{i}"]
+            ub = hist[f"lbound_{i + 1}"]
+            # we use <= rather than < because we specified include_lowest in pd.cut
+            if lb <= value <= ub:
+                binid = i
+                break
+        # microoptimization: make these computations lazy
+        # these estimates are as described in 13.3 of abraham/silberschatz, p592-594
+        eq_estimate = hist[f"count_{binid}"] / hist[f"distinct_{binid}"] if binid != -1 else 0
+        le_estimate = 0
+        if binid != -1:
+            # iterate up to our current bin
+            for i in range(binid):
+                le_estimate += hist[f"count_{i}"]
+            # within our current bin, assume a uniform distribution
+            lb = hist[f"lbound_{binid}"]
+            ub = hist[f"lbound_{binid + 1}"]
+            le_estimate += (value - lb) / (ub - lb)
+        eq_estimate = max(0, min(items, eq_estimate))
+        le_estimate = max(0, min(items, le_estimate))
+        if comp == Comparison.EQ:
+            if value > maxval or value < minval:
+                return 0
+            return eq_estimate
+        elif comp == Comparison.NE:
+            return items - eq_estimate
+        elif comp == Comparison.LT:
+            if value >= maxval:
+                return items
+            return le_estimate - eq_estimate
+        elif comp == Comparison.LE:
+            if value > maxval:
+                return items
+            return le_estimate
+        elif comp == Comparison.GT:
+            if value <= minval:
+                return items
+            return items - le_estimate
+        elif comp == Comparison.GE:
+            if value < minval:
+                return items
+            return items - le_estimate + eq_estimate
+        raise NotImplementedError()
     
-    @staticmethod
-    def get_mask(df, comp, value):
+    def get_mask(self, df, value):
+        comp = self
         if value is None:
             if comp == Comparison.EQ:
                 return df.map(lambda x: pd.DataFrame.isna(x, dtypes=np.bool))
@@ -138,16 +246,26 @@ class Comparison(Enum):
             return df.map(lambda x: pd.DataFrame.ge(x, value))
         raise NotImplementedError()
 
+
 # Produces a dataframe where elements are T/F according to some comparison
 @dataclass(frozen=True)
 class CompOp(DfOp):
     comp: Comparison
     value: Optional[int]
-    _kwargs: Dict[str, object] # unused for now
+    _hint_colname: Optional[str]
+    _kwargs: Dict[str, object] = field(repr=False) # unused for now
     
     def apply(self, df):
         self._info(f"*mask on df {id(df)}")
-        return Comparison.get_mask(df, self.comp, self.value)
+        return self.comp.get_mask(df, self.value)
+
+    def size_estimate(self, df):
+        if self._hint_colname:
+            try:
+                return self.comp.size_estimate(df, self._hint_colname, self.value)
+            except KeyError:
+                pass
+        return len(df.index)
 
     def __hash__(self):
         return hash((self.comp, self.value))
@@ -179,15 +297,14 @@ class FilterOp(DfOp):
         self.other = other
         self.kwargs = kwargs
 
-    @property
-    def mask(self):
-        return self.cond._plan
+    def other(self):
+        return self.cond
 
     def apply(self, df):
         self._info(f"*filter on df {id(df)}")
         def where_builder_series(df, cond):
             return df.where(cond, self.other, **self.kwargs)
-        cond_df = self.cond._plan.execute()
+        cond_df = self.cond._plan._execute()
         return df.binary_op(where_builder_series, cond_df, join_type="left")
 
 
@@ -213,11 +330,43 @@ class MaskOp(DfOp):
     rows: "OpportunisticPandasQueryCompiler"
 
     def apply(self, df):
-        # similar to PandasQueryCompiler.getitem_array
-        mask_rows = self.rows._plan.execute_to_pandas().squeeze(axis=1)
-        key = pd.RangeIndex(len(df.index))[mask_rows]
+        # similar to PandasQueryCompiler.getitem_array, but hopefully more efficient
+        # by converting to np array instead of a new dataframe
+        if df.index.empty:
+            return df
+        mask_rows = self.rows._plan._execute() #.squeeze(axis=1)
+        idx = mask_rows.index
+        if idx.empty or len(idx) == 0:
+            key = idx
+        else:
+            mask_rows = mask_rows.transpose().to_numpy()
+            assert len(mask_rows) == 1
+            key = pd.RangeIndex(len(df.index))[mask_rows[0]]
         return df.mask(row_numeric_idx=key)
 
+    def other(self):
+        return self.rows
+
+@dataclass(frozen=True)
+class InnerJoin(DfOp):
+    """
+    Performs an inner join on two dataframes.
+    """
+    right: "OpportunisticPandasQueryCompiler"
+
+    def apply(self, df):
+        right = self.right
+
+        def map_func(left, right=right._plan.execute(), kwargs={}):
+            return pd.merge(left, right, **kwargs)
+        new_self = OpportunisticPandasQueryCompiler(
+            df.apply_full_axis(1, map_func)
+        )
+        return new_self.reset_index(drop=True)._plan._execute()
+
+    def other(self):
+        return self.right
+        
 # maps QueryPlan hash to executed result
 # this cannot be stored as just a field on the class because we might construct
 # the same queryplan from 2 different instances
@@ -232,8 +381,9 @@ class QueryPlan:
     # TODO make this a dag or tree or something instead
     ops: Tuple[DfOp]
 
-    def __init__(self, df):
-        self.ops = ()
+    def __init__(self, df, ops=()):
+        # tuples are immutable, so it's ok if the kwargs is duplicated
+        self.ops = ops
         self.df = df
 
     def __hash__(self):
@@ -247,28 +397,157 @@ class QueryPlan:
             s += "\n"
         idlevel += 1
         for op in self.ops:
-            tpe = type(op)
-            if tpe is FilterOp:
-                s += indents() + "Filter(\n"
-                s += op.mask.pretty_str(idlevel=idlevel+1) + "\n"
+            other = op.other()
+            if other:
+                s += indents() + type(op).__name__ + "(\n"
+                s += other._plan.pretty_str(idlevel=idlevel+1) + "\n"
                 s += indents() + "),\n" 
             else:
                 s += indents() + str(op) + ",\n"
         idlevel -= 1
-        s += indents() + ")"
+        if self.ops:
+            s += indents()
+        s += ")"
         return s
 
     def append_op(self, new_df, op):
-        newplan = QueryPlan(new_df)
-        newplan.ops = self.ops + (op,)
-        return newplan
+        return QueryPlan(new_df, self.ops + (op,))
 
     def copy(self, new_df):
-        newplan = QueryPlan(new_df)
-        newplan.ops = self.ops
-        return newplan
+        return QueryPlan(new_df, self.ops)
+
+    def _card_estimates(self):
+        # Computes (row, col) cardinality estimates
+        row_card = len(self.df.index)
+        # print("BEGIN counting cost for qp", id(self))
+        for o in self.ops:
+            if isinstance(o, CompOp):
+                # Even though technically the cardinality doesn't change, we
+                # can figure out how many rows would be true in this result
+                row_card += o.size_estimate(self.df)
+            elif isinstance(o, SelectCol):
+                pass
+                # print("selectcol estimate 1", o)
+            elif isinstance(o, FilterOp):
+                o_rc = o.cond._plan._card_estimates()
+                row_card += o_rc
+                # print("filter estimates:", o, row_card)
+            elif isinstance(o, MaskOp):
+                o_rc = o.rows._plan._card_estimates()
+                row_card += o_rc
+                # print("mask estimate:", o, row_card)
+            elif isinstance(o, InnerJoin):
+                # TODO column count should go up generally, for now we just penalize
+                # the row cardinality heuristic for simplicity
+                row_card *= 2
+            else:
+                raise NotImplementedError(f"could not compute cardinality estimate for {o}")
+        # print("END counting cost for qp", id(self), row_card)
+        return row_card
 
     def optimize(self):
+        """
+        Greedy algorithm that reorders query plan operations according to equivalence rules.
+
+        TODO do something about metadata tracking? e.g. pushing column selection across a mask
+        """
+        all_ops = list(self.ops)
+
+        # (hacky) hardcoded transformation for sequential mask operations
+        for i in range(len(all_ops) - 1):
+            # Attempts to perform optimizations for this pattern:
+            # MaskOp1(Select1, Comp1)
+            # MaskOp2(MaskOp1, Select2, Comp2)
+            # which can be transformed into
+            # MaskOp2(Select2, Comp2)
+            # MaskOp1(MaskOp2, Select1, Comp1)
+            # fixing this requires a more robust query plan expression tree
+            o1, o2 = all_ops[i:i + 2]
+            if isinstance(o1, MaskOp) and isinstance(o2, MaskOp):
+                try:
+                    sel1, comp1 = o1.other()._plan.ops
+                    maybe_mo1, sel2, comp2 = o2.other()._plan.ops
+                    if maybe_mo1 != o1:
+                        continue
+                    cost1 = QueryPlan(o1.other()._modin_frame, (o1, o2))._card_estimates()
+
+                    o2c = o2.other().copy()
+                    o2df = o2c._modin_frame
+                    o2c._plan = QueryPlan(o2df, (sel2, comp2))
+                    o2p = MaskOp(o2c)
+                    o1c = o1.other().copy()
+                    o1c._plan = QueryPlan(o1c._modin_frame, (o2p, sel1, comp1))
+                    o1p = MaskOp(o1c)
+                    # print("candidate swapped plan:")
+                    candidate = QueryPlan(o2df, (o2p, o1p))
+                    # print(candidate.pretty_str())
+                    cost2 = candidate._card_estimates()
+                    # print("cost1", cost1)
+                    # print("cost2", cost2)
+                    if cost2 < cost1:
+                        all_ops[i] = o2p
+                        all_ops[i + 1] = o1p
+                except ValueError:
+                    # destructuring failed, whatever
+                    continue
+
+        # Next, recursively optimize
+        for i, op in enumerate(all_ops):
+            other_qc = op.other()
+            if not other_qc:
+                continue
+            new_plan = other_qc._plan.optimize()
+            new_qc = OpportunisticPandasQueryCompiler(
+                other_qc._modin_frame,
+                new_plan_factory=lambda _df: new_plan
+            )
+            if isinstance(op, InnerJoin):
+                all_ops[i] = InnerJoin(new_qc)
+            elif isinstance(op, MaskOp):
+                all_ops[i] = MaskOp(new_qc)
+            elif isinstance(op, FilterOp):
+                all_ops[i] = FilterOp(new_qc, other_qc.other, **other_qc.kwargs)
+            else:
+                raise NotImplementedError()
+
+        new_ops = []
+        df = self.df
+        while all_ops:
+            # Keep searching the list of remaining operations until
+            # no more commutative ops are found
+            # These arrays track the cardinality of the resulting data
+            # if that operation is performed first
+            row_cards = [len(df.index)] * len(all_ops)
+            for i, o in enumerate(all_ops):
+                candidate_plan = [all_ops[i]] + all_ops[:i] + all_ops[i + 1:]
+                row_cards[i] = QueryPlan(self.df, candidate_plan)._card_estimates()
+            """
+            below algorithm is borked in situations where a
+            select removes a column that is later operated on
+
+            # Prioritize select operations
+            # Find index of first join -- select operations can commute with others, but not
+            # inner joins, since those may increase the number of columns
+            first_join_idx = len(all_ops)
+            for i, op in enumerate(all_ops):
+                if isinstance(op, InnerJoin):
+                    first_join_idx = i
+                    break
+            # Choose select operation, if any
+            new_op = None
+            for i in range(first_join_idx):
+                if isinstance(all_ops[i], SelectCol):
+                    new_op = all_ops.pop(i)
+                    break
+            if new_op is not None:
+                new_ops.append(new_op)
+                continue
+            """
+            # Otherwise, choose operation with lowest row cardinalities
+            i = min(range(len(row_cards)), key=row_cards.__getitem__)
+            new_ops.append(all_ops.pop(i))
+        return QueryPlan(self.df, tuple(new_ops))
+
         """
         Returns a new QueryPlan object that is optimized based on the dynamic programming algorithm
         given in figure 13.7 of Abraham/Silberschatz.
@@ -290,22 +569,22 @@ class QueryPlan:
                                         P2 using A"
             return bestplan[S]
         """
-        ...
 
-    def execute(self):
+    def _execute(self):
         """
         Returns a _modin_frame object (should be of type PandasOnRayDataFrame).
         Memoizes the result.
 
-        If being presented to the user, use execute_to_pandas() instead, which
+        If being presented to the user, use the public execute() instead, which
         will attempt to check if the to_pandas conversion was cached.
         """
         if self in _plans:
-            print("cached non-pd")
+            # print("cached non-pd")
             return _plans[self][0]
         df = self.df
         i = 0
         for op in self.ops:
+            # print(op)
             # old_id = id(df)
             df = op.apply(df)
             # self._info(f"***iteration {i} w/ {op}: {old_id} -> {id(df)}")
@@ -316,12 +595,12 @@ class QueryPlan:
         _plans[self] = (df, None)
         return df
 
-    def execute_to_pandas(self):
-        if self not in _plans:
+    def execute(self, clean=False):
+        if self not in _plans or clean:
             # memoizes _plans[self][0]
-            self.execute()
-        if _plans[self][1] is not None:
-            print("using cached pd")
+            self._execute()
+        if _plans[self][1] is not None and not clean:
+            # print("using cached pd")
             return _plans[self][1]
         result_df = _plans[self][0]
         df_pandas = result_df.to_pandas()
@@ -375,6 +654,9 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
             lambda df: self._plan.append_op(df, op)
         )
 
+    def _comp_with_other(self, comp, other, kwargs):
+        return self._new_qc_with_op(CompOp(comp, other, self._colname_hint(), kwargs))
+
     def _print_op_start(self, msg):
         if self._verbose:
             print(f"!! {msg} on qc")
@@ -406,33 +688,41 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         assert isinstance(key, type(self)), "getitem_row_array key must also be the same QueryCompiler"
         return self._new_qc_with_op(MaskOp(key))
 
+    def _colname_hint(self):
+        ops = self._plan.ops
+        # If the last operation was a select, then if the next operation is
+        # a comparison, we can use the column name of the select for histograms
+        if ops and isinstance(ops[-1], SelectCol):
+            return ops[-1].colname
+        return None
+
     def notna(self):
         self._print_op_start("notna")
-        return self._new_qc_with_op(CompOp(Comparison.NE, None))
+        return self._comp_with_other(Comparison.NE, None, {})
 
     def lt(self, other, **kwargs):
         self._print_op_start("lt")
-        return self._new_qc_with_op(CompOp(Comparison.LT, other, kwargs))
+        return self._comp_with_other(Comparison.LT, other, kwargs)
 
     def le(self, other, **kwargs):
         self._print_op_start("le")
-        return self._new_qc_with_op(CompOp(Comparison.LE, other, kwargs))
+        return self._comp_with_other(Comparison.LE, other, kwargs)
 
     def gt(self, other, **kwargs):
         self._print_op_start("gt")
-        return self._new_qc_with_op(CompOp(Comparison.GT, other, kwargs))
+        return self._comp_with_other(Comparison.GT, other, kwargs)
 
     def ge(self, other, **kwargs):
         self._print_op_start("ge")
-        return self._new_qc_with_op(CompOp(Comparison.GE, other, kwargs))
+        return self._comp_with_other(Comparison.GE, other, kwargs)
 
     def eq(self, other, **kwargs):
         self._print_op_start("eq")
-        return self._new_qc_with_op(CompOp(Comparison.EQ, other, kwargs))
+        return self._comp_with_other(Comparison.EQ, other, kwargs)
 
     def ne(self, other, **kwargs):
         self._print_op_start("ne")
-        return self._new_qc_with_op(CompOp(Comparison.NE, other, kwargs))
+        return self._comp_with_other(Comparison.NE, other, kwargs)
 
     def where(self, cond, other, **kwargs):
         self._print_op_start("where")
@@ -442,3 +732,8 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         # "else" branch of PandasQueryCompiler.where
         assert isinstance(other, pd.Series), "other must be Series"
         return self._new_qc_with_op(FilterOp(cond, other, **kwargs))
+
+    def merge(self, other, how="inner", **kwargs):
+        assert how == "inner", "only inner joins are currently supported"
+        assert isinstance(other, type(self)), "merge must be with other df with same qc type"
+        return self._new_qc_with_op(InnerJoin(other))
