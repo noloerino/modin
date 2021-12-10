@@ -59,6 +59,8 @@ def _info(msg, *args):
         print("! " + msg, *args)
 
 
+_depth = 0 ### GLOBAL VARIABLE TO TRACK DEPTH
+
 @_inherit_docstrings(
     pandas.DataFrame, excluded=[pandas.DataFrame.__init__], apilink="pandas.DataFrame"
 )
@@ -117,7 +119,12 @@ class DataFrame(BasePandasDataset):
         copy=None,
         query_compiler=None,
     ):
-        _info("start of new df=", id(self), "w/ qc=", id(query_compiler))
+        global _depth
+        _info("start of new df=", id(self),
+            "_depth=", _depth,
+            "w/ qc=", id(query_compiler))
+        tmp_self_depth = _depth
+        _depth += 1
         Engine.subscribe(_update_engine)
         if isinstance(data, (DataFrame, Series)):
             self._query_compiler = data._query_compiler.copy()
@@ -157,6 +164,7 @@ class DataFrame(BasePandasDataset):
             distributed_frame = from_non_pandas(data, index, columns, dtype)
             if distributed_frame is not None:
                 self._query_compiler = distributed_frame._query_compiler
+                _depth -= 1
                 return
 
             warnings.warn(
@@ -189,7 +197,9 @@ class DataFrame(BasePandasDataset):
         else:
             self._query_compiler = query_compiler
             _info("end of new df w qc=", id(query_compiler))
-        _queue_df(self)
+        _depth -= 1
+        if tmp_self_depth == 0:
+            _queue_df(self)
 
     def __repr__(self):
         """

@@ -107,6 +107,9 @@ class _StatsManager:
     def has_next(self):
         return len(_stats_queue) > 0
 
+    def size(self):
+        return len(_stats_queue)
+
     def compute_next(self):
         if _stats_queue:
             histogram(_stats_queue.pop(0))
@@ -116,11 +119,8 @@ class _StatsManager:
         Attempts to run background statistics collection on the next dataframe
         in _stats_queue.
         """
-        # if _stats_queue:
-        #     histogram(_stats_queue.pop(0))
         while _stats_queue:
-            histogram(_stats_queue.pop(0))
-            # histogram(_stats_queue.pop(0))
+            self.compute_next()
         # print(_stats_queue)
         # print(_histograms)
 
@@ -139,8 +139,9 @@ stats_manager = _StatsManager() # singleton, exposed to API
 
 def _queue_df(df):
     # only queue the dataframe if it was constructed by the user (not the
-    # query compiler), meaning it should have no ops
-    if not df._query_compiler._plan.ops:
+    # query compiler as an intermediate computation)
+    # this means the plan must be empty
+    if len(df._query_compiler._plan.ops) == 0:
         _stats_queue.append(df)
 
 
@@ -271,6 +272,7 @@ class CompOp(DfOp):
             try:
                 return self.comp.size_estimate(df, self._hint_colname, self.value)
             except KeyError:
+                print("MISSING HISTOGRAM:", id(df), self._hint_colname)
                 pass
         return len(df.index)
 
