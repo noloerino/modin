@@ -194,6 +194,12 @@ class Comparison(Enum):
         # these estimates are as described in 13.3 of abraham/silberschatz, p592-594
         eq_estimate = hist[f"count_{binid}"] / hist[f"distinct_{binid}"] if binid != -1 else 0
         le_estimate = 0
+        if value > maxval:
+            eq_estimate = 0
+            le_estimate = items
+        if value < minval:
+            eq_estimate = 0
+            le_estimate = 0
         if binid != -1:
             # iterate up to our current bin
             for i in range(binid):
@@ -375,6 +381,64 @@ class InnerJoin(DfOp):
 
     def other(self):
         return self.right
+
+@dataclass(frozen=True)
+class MeanOp(DfOp):
+    """
+    Calculates the mean across a particular axis of the dataframe.
+    """
+    axis: int
+
+    def apply(self, df):
+        """copied from PandasQueryCompiler"""
+        pandas = pd
+        axis = self.axis
+        kwargs = {}
+        if kwargs.get("level") is not None:
+            return self.default_to_pandas(pandas.DataFrame.mean, axis=axis, **kwargs)
+        skipna = kwargs.get("skipna", True)
+        # TODO-FIX: this function may work incorrectly with user-defined "numeric" values.
+        # Since `count(numeric_only=True)` discards all unknown "numeric" types, we can get incorrect
+        # divisor inside the reduce function.
+        def map_fn(df, **kwargs):
+            """
+            Perform Map phase of the `mean`.
+
+            Compute sum and number of elements in a given partition.
+            """
+            result = pandas.DataFrame(
+                {
+                    "sum": df.sum(axis=axis, skipna=skipna),
+                    "count": df.count(axis=axis, numeric_only=True),
+                }
+            )
+            return result if axis else result.T
+
+        def reduce_fn(df, **kwargs):
+            """
+            Perform Reduce phase of the `mean`.
+
+            Compute sum for all the the partitions and divide it to
+            the total number of elements.
+            """
+            sum_cols = df["sum"] if axis else df.loc["sum"]
+            count_cols = df["count"] if axis else df.loc["count"]
+
+            if not isinstance(sum_cols, pandas.Series):
+                # If we got `NaN` as the result of the sum in any axis partition,
+                # then we must consider the whole sum as `NaN`, so setting `skipna=False`
+                sum_cols = sum_cols.sum(axis=axis, skipna=False)
+                count_cols = count_cols.sum(axis=axis, skipna=False)
+            return sum_cols / count_cols
+        # monkeypatch for MapReduce.register + df._reduce_dimension
+        # doesn't really work
+        data = df.map_reduce(
+            axis,
+            lambda x: map_fn(x, **kwargs),
+            lambda y: reduce_fn(y, **kwargs),
+        ).transpose()
+        return data
+
         
 # maps QueryPlan hash to executed result
 # this cannot be stored as just a field on the class because we might construct
@@ -460,8 +524,9 @@ class QueryPlan:
 
         TODO do something about metadata tracking? e.g. pushing column selection across a mask
         """
+        if self in _bestplans:
+            return _bestplans[self]
         all_ops = list(self.ops)
-
         # (hacky) hardcoded transformation for sequential mask operations
         for i in range(len(all_ops) - 1):
             # Attempts to perform optimizations for this pattern:
@@ -519,43 +584,10 @@ class QueryPlan:
             else:
                 raise NotImplementedError()
 
-        new_ops = []
-        df = self.df
-        while all_ops:
-            # Keep searching the list of remaining operations until
-            # no more commutative ops are found
-            # These arrays track the cardinality of the resulting data
-            # if that operation is performed first
-            row_cards = [len(df.index)] * len(all_ops)
-            for i, o in enumerate(all_ops):
-                candidate_plan = [all_ops[i]] + all_ops[:i] + all_ops[i + 1:]
-                row_cards[i] = QueryPlan(self.df, candidate_plan)._card_estimates()
-            """
-            below algorithm is borked in situations where a
-            select removes a column that is later operated on
-
-            # Prioritize select operations
-            # Find index of first join -- select operations can commute with others, but not
-            # inner joins, since those may increase the number of columns
-            first_join_idx = len(all_ops)
-            for i, op in enumerate(all_ops):
-                if isinstance(op, InnerJoin):
-                    first_join_idx = i
-                    break
-            # Choose select operation, if any
-            new_op = None
-            for i in range(first_join_idx):
-                if isinstance(all_ops[i], SelectCol):
-                    new_op = all_ops.pop(i)
-                    break
-            if new_op is not None:
-                new_ops.append(new_op)
-                continue
-            """
-            # Otherwise, choose operation with lowest row cardinalities
-            i = min(range(len(row_cards)), key=row_cards.__getitem__)
-            new_ops.append(all_ops.pop(i))
-        return QueryPlan(self.df, tuple(new_ops))
+        new_plan = QueryPlan(self.df, tuple(all_ops))
+        _bestplans[self] = new_plan
+        _bestplans[new_plan] = new_plan
+        return new_plan
 
         """
         Returns a new QueryPlan object that is optimized based on the dynamic programming algorithm
@@ -612,7 +644,10 @@ class QueryPlan:
             # print("using cached pd")
             return _plans[self][1]
         result_df = _plans[self][0]
-        df_pandas = result_df.to_pandas()
+        if isinstance(result_df, pd.Series) or isinstance(result_df, pd.DataFrame):
+            df_pandas = result_df
+        else:
+            df_pandas = result_df.to_pandas()
         _plans[self] = (result_df, df_pandas)
         return df_pandas
 
@@ -746,3 +781,9 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         assert how == "inner", "only inner joins are currently supported"
         assert isinstance(other, type(self)), "merge must be with other df with same qc type"
         return self._new_qc_with_op(InnerJoin(other))
+
+    def mean(self, axis, **kwargs):
+        self._print_op_start("mean")
+        if axis is None:
+            axis = kwargs.get("axis", 0)
+        return self._new_qc_with_op(MeanOp(axis))
