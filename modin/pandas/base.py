@@ -103,7 +103,9 @@ class BasePandasDataset(object):
     @property
     def _plan(self):
         return self._query_compiler._plan
-    
+
+    def execute(self):
+        return self._plan.execute()
 
     # Pandas class that we pretend to be; usually it has the same name as our class
     # but lives in "pandas" namespace.

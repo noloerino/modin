@@ -112,7 +112,10 @@ class _StatsManager:
 
     def compute_next(self):
         if _stats_queue:
-            histogram(_stats_queue.pop(0))
+            df = _stats_queue.pop(0)
+            histogram(df)
+            # Also compute optimized plan, which gets memoized
+            df._query_compiler._plan.optimize()
 
     def compute_all(self):
         """
@@ -130,10 +133,16 @@ class _StatsManager:
     def clear_all(self):
         global _histograms
         global _stats_queue
+        global _plans
+        global _bestplans
         del _histograms
         del _stats_queue
+        del _plans
+        del _bestplans
         _histograms = {}
         _stats_queue = []
+        _plans = {}
+        _bestplans = {}
 
 stats_manager = _StatsManager() # singleton, exposed to API
 
@@ -233,7 +242,7 @@ class Comparison(Enum):
                 return items
             return items - le_estimate + eq_estimate
         raise NotImplementedError()
-    
+
     def get_mask(self, df, value):
         comp = self
         if value is None:
@@ -268,7 +277,7 @@ class CompOp(DfOp):
     value: Optional[int]
     _hint_colname: Optional[str]
     _kwargs: Dict[str, object] = field(repr=False) # unused for now
-    
+
     def apply(self, df):
         self._info(f"*mask on df {id(df)}")
         return self.comp.get_mask(df, self.value)
@@ -336,7 +345,7 @@ class SelectCol(DfOp):
 @dataclass(frozen=True)
 class MaskOp(DfOp):
     # idk the types
-    # row_numeric_idx: 
+    # row_numeric_idx:
     # col_numeric_idx:
     """
     (hopefully) temporary hack: this QC produces a DF that's a 1-d bool array, and
@@ -439,7 +448,7 @@ class MeanOp(DfOp):
         ).transpose()
         return data
 
-        
+
 # maps QueryPlan hash to executed result
 # this cannot be stored as just a field on the class because we might construct
 # the same queryplan from 2 different instances
@@ -474,7 +483,7 @@ class QueryPlan:
             if other:
                 s += indents() + type(op).__name__ + "(\n"
                 s += other._plan.pretty_str(idlevel=idlevel+1) + "\n"
-                s += indents() + "),\n" 
+                s += indents() + "),\n"
             else:
                 s += indents() + str(op) + ",\n"
         idlevel -= 1
@@ -678,6 +687,9 @@ class OpportunisticPandasQueryCompiler(PandasQueryCompiler):
         # Because the compiler plan is lazy, we're fine with copying the frame
         # (this may change later)
         return self.__constructor__(self._modin_frame, new_plan_factory=self._plan.copy)
+
+    def execute(self):
+        return self._plan.execute()
 
     lazy_execution = True
 
