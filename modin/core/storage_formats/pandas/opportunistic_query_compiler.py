@@ -331,6 +331,9 @@ class FilterOp(DfOp):
         cond_df = self.cond._plan._execute()
         return df.binary_op(where_builder_series, cond_df, join_type="left")
 
+    def __hash__(self):
+        return hash(self.cond._plan)
+
 
 @dataclass(frozen=True)
 class SelectCol(DfOp):
@@ -371,6 +374,9 @@ class MaskOp(DfOp):
     def other(self):
         return self.rows
 
+    def __hash__(self):
+        return hash(self.rows._plan)
+
 @dataclass(frozen=True)
 class InnerJoin(DfOp):
     """
@@ -390,6 +396,9 @@ class InnerJoin(DfOp):
 
     def other(self):
         return self.right
+
+    def __hash__(self):
+        return hash(self.right._plan)
 
 @dataclass(frozen=True)
 class MeanOp(DfOp):
