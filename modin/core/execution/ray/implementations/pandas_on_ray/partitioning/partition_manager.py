@@ -161,11 +161,9 @@ def _make_wrapped_method(name: str):
 for method in (
     "map_partitions",
     "lazy_map_partitions",
-    "map_axis_partitions",
+    "map_select_indices",
+    "map_select_indices_both_axes",
     "_apply_func_to_list_of_partitions",
-    "apply_func_to_select_indices",
-    "apply_func_to_select_indices_along_full_axis",
-    "apply_func_to_indices_both_axis",
     "n_ary_operation",
 ):
     _make_wrapped_method(method)

@@ -18,8 +18,19 @@ ModinDataframe is a parent abstract class for any dataframe class.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Hashable, Optional, Callable, Union, Dict
+from typing import List, Hashable, Optional, Callable, Union, Dict, TYPE_CHECKING
+
+import pandas
+
 from modin.core.dataframe.base.dataframe.utils import Axis, JoinType
+
+if TYPE_CHECKING:
+    from modin.core.dataframe.pandas.partitioning import (
+        PandasDataframePartition,
+        PandasDataframeAxisPartition,
+    )
+
+    Partition = Union[PandasDataframeAxisPartition, PandasDataframePartition]
 
 
 class ModinDataframe(ABC):
@@ -91,8 +102,10 @@ class ModinDataframe(ABC):
     def map(
         self,
         function: Callable,
+        *,
         axis: Optional[Union[int, Axis]] = None,
-        dtypes: Optional[str] = None,
+        dtypes: Optional[Union[pandas.Series, type]] = None,
+        copy_dtypes: bool = False,
     ) -> "ModinDataframe":
         """
         Apply a user-defined function row-wise if `axis`=0, column-wise if `axis`=1, and cell-wise if `axis` is None.
@@ -102,11 +115,14 @@ class ModinDataframe(ABC):
         function : callable(row|col|cell) -> row|col|cell
             The function to map across the dataframe.
         axis : int or modin.core.dataframe.base.utils.Axis, optional
-            The axis to map over.
-        dtypes : str, optional
+            The axis to map over. If None, the map will be performed element-wise.
+        dtypes : pandas.Series or scalar type, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
             type, and this allows us to avoid (re)computing it.
+        copy_dtypes : bool, default: False
+            If True, the dtypes of the resulting dataframe are copied from the original,
+            and the ``dtypes`` argument is ignored.
 
         Returns
         -------
@@ -257,8 +273,9 @@ class ModinDataframe(ABC):
     def reduce(
         self,
         axis: Union[int, Axis],
-        function: Callable,
-        dtypes: Optional[str] = None,
+        function: Callable[["Partition"], object],
+        *,
+        dtypes: Optional[pandas.Series] = None,
     ) -> "ModinDataframe":
         """
         Perform a user-defined aggregation on the specified axis, where the axis reduces down to a singleton.
@@ -269,7 +286,7 @@ class ModinDataframe(ABC):
             The axis to perform the reduce over.
         function : callable(row|col) -> single value
             The reduce function to apply to each column.
-        dtypes : str, optional
+        dtypes : pandas.Series, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
             type, and this allows us to avoid (re)computing it.
@@ -289,9 +306,10 @@ class ModinDataframe(ABC):
     def tree_reduce(
         self,
         axis: Union[int, Axis],
-        map_func: Callable,
-        reduce_func: Optional[Callable] = None,
-        dtypes: Optional[str] = None,
+        map_func: Callable[["Partition"], "Partition"],
+        reduce_func: Optional[Callable[["Partition"], object]] = None,
+        *,
+        dtypes: Optional[pandas.Series] = None,
     ) -> "ModinDataframe":
         """
         Perform a user-defined aggregation on the specified axis, where the axis reduces down to a singleton using a tree-reduce computation pattern.

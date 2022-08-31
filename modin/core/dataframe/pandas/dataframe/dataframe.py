@@ -25,7 +25,15 @@ from pandas.api.types import is_object_dtype
 from pandas.core.indexes.api import ensure_index, Index, RangeIndex
 from pandas.core.dtypes.common import is_numeric_dtype, is_list_like
 from pandas._libs.lib import no_default
-from typing import List, Hashable, Optional, Callable, Union, Dict, TYPE_CHECKING
+from typing import (
+    List,
+    Hashable,
+    Optional,
+    Callable,
+    Union,
+    Dict,
+    TYPE_CHECKING,
+)
 
 from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
 from modin.error_message import ErrorMessage
@@ -35,6 +43,7 @@ from modin.core.storage_formats.pandas.parsers import (
 from modin.core.dataframe.base.dataframe.dataframe import ModinDataframe
 from modin.core.dataframe.base.dataframe.utils import (
     Axis,
+    AxisInt,
     JoinType,
 )
 
@@ -43,6 +52,12 @@ if TYPE_CHECKING:
         ProtocolDataframe,
     )
     from pandas._typing import npt
+    from modin.core.dataframe.pandas.partitioning import (
+        PandasDataframePartition,
+        PandasDataframeAxisPartition,
+    )
+
+    Partition = Union[PandasDataframeAxisPartition, PandasDataframePartition]
 
 from modin.pandas.indexing import is_range_like
 from modin.pandas.utils import is_full_grab_slice, check_both_not_none
@@ -1002,11 +1017,14 @@ class PandasDataframe(ClassLogger):
             result.index = df.index
             return result
 
-        new_parts = self._partition_mgr_cls.apply_func_to_select_indices(
+        new_parts = self._partition_mgr_cls.map_select_indices(
+            from_labels_executor,
             0,
             self._partitions,
-            from_labels_executor,
+            None,
+            False,
             [0],
+            None,
             keep_remaining=True,
         )
         new_column_widths = [
@@ -1070,16 +1088,16 @@ class PandasDataframe(ClassLogger):
             A new PandasDataframe with reordered columns and/or rows.
         """
         if row_positions is not None:
-            ordered_rows = self._partition_mgr_cls.map_axis_partitions(
-                0, self._partitions, lambda df: df.iloc[row_positions]
+            ordered_rows = self._partition_mgr_cls.map_partitions(
+                self._partitions, lambda df: df.iloc[row_positions], axis=0
             )
             row_idx = self.index[row_positions]
         else:
             ordered_rows = self._partitions
             row_idx = self.index
         if col_positions is not None:
-            ordered_cols = self._partition_mgr_cls.map_axis_partitions(
-                1, ordered_rows, lambda df: df.iloc[:, col_positions]
+            ordered_cols = self._partition_mgr_cls.map_partitions(
+                ordered_rows, lambda df: df.iloc[:, col_positions], axis=1
             )
             col_idx = self.columns[col_positions]
         else:
@@ -1532,7 +1550,9 @@ class PandasDataframe(ClassLogger):
 
         return _tree_reduce_func
 
-    def _compute_tree_reduce_metadata(self, axis, new_parts):
+    def _compute_tree_reduce_metadata(
+        self, axis, new_parts, dtypes: Optional[pandas.Series] = None
+    ):
         """
         Compute the metadata for the result of reduce function.
 
@@ -1542,6 +1562,8 @@ class PandasDataframe(ClassLogger):
             The axis on which reduce function was applied.
         new_parts : NumPy 2D array
             Partitions with the result of applied function.
+        dtypes : Optional[pandas.Series], default: None
+            The data types of the result.
 
         Returns
         -------
@@ -1556,12 +1578,11 @@ class PandasDataframe(ClassLogger):
         new_axes_lengths[axis] = [1]
         new_axes_lengths[axis ^ 1] = self._axes_lengths[axis ^ 1]
 
-        new_dtypes = None
         result = self.__constructor__(
             new_parts,
             *new_axes,
             *new_axes_lengths,
-            new_dtypes,
+            dtypes,
         )
         return result
 
@@ -1569,8 +1590,9 @@ class PandasDataframe(ClassLogger):
     def reduce(
         self,
         axis: Union[int, Axis],
-        function: Callable,
-        dtypes: Optional[str] = None,
+        function: Callable[["Partition"], object],
+        *,
+        dtypes: Optional[pandas.Series] = None,
     ) -> "PandasDataframe":
         """
         Perform a user-defined aggregation on the specified axis, where the axis reduces down to a singleton. Requires knowledge of the full axis for the reduction.
@@ -1581,7 +1603,7 @@ class PandasDataframe(ClassLogger):
             The axis to perform the reduce over.
         function : callable(row|col) -> single value
             The reduce function to apply to each column.
-        dtypes : str, optional
+        dtypes : pandas.Series, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
             type, and this allows us to avoid (re)computing it.
@@ -1597,18 +1619,19 @@ class PandasDataframe(ClassLogger):
         """
         axis = Axis(axis)
         function = self._build_treereduce_func(axis.value, function)
-        new_parts = self._partition_mgr_cls.map_axis_partitions(
-            axis.value, self._partitions, function
+        new_parts = self._partition_mgr_cls.map_partitions(
+            self._partitions, function, axis=axis.value
         )
-        return self._compute_tree_reduce_metadata(axis.value, new_parts)
+        return self._compute_tree_reduce_metadata(axis.value, new_parts, dtypes)
 
     @lazy_metadata_decorator(apply_axis="opposite", axis_arg=0)
     def tree_reduce(
         self,
         axis: Union[int, Axis],
-        map_func: Callable,
-        reduce_func: Optional[Callable] = None,
-        dtypes: Optional[str] = None,
+        map_func: Callable[["Partition"], "Partition"],
+        reduce_func: Optional[Callable[["Partition"], object]] = None,
+        *,
+        dtypes: Optional[pandas.Series] = None,
     ) -> "PandasDataframe":
         """
         Apply function that will reduce the data to a pandas Series.
@@ -1622,7 +1645,7 @@ class PandasDataframe(ClassLogger):
         reduce_func : callable(row|col) -> single value, optional
             Callable function to reduce the dataframe.
             If none, then apply map_func twice.
-        dtypes : str, optional
+        dtypes : pandas.Series, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
             type, and this allows us to avoid (re)computing it.
@@ -1640,13 +1663,69 @@ class PandasDataframe(ClassLogger):
             reduce_func = self._build_treereduce_func(axis.value, reduce_func)
 
         map_parts = self._partition_mgr_cls.map_partitions(self._partitions, map_func)
-        reduce_parts = self._partition_mgr_cls.map_axis_partitions(
-            axis.value, map_parts, reduce_func
+        reduce_parts = self._partition_mgr_cls.map_partitions(
+            map_parts, reduce_func, axis=axis.value
         )
-        return self._compute_tree_reduce_metadata(axis.value, reduce_parts)
+        return self._compute_tree_reduce_metadata(axis.value, reduce_parts, dtypes)
 
-    @lazy_metadata_decorator(apply_axis=None)
-    def map(self, func: Callable, dtypes: Optional[str] = None) -> "PandasDataframe":
+    def _make_init_labels_args(self, partitions, index, columns) -> dict:  # noqa: GL08
+        kw = {}
+        kw["index"], kw["row_lengths"] = (
+            self._compute_axis_labels_and_lengths(0, partitions)
+            if index is None
+            else (index, None)
+        )
+        kw["columns"], kw["column_widths"] = (
+            self._compute_axis_labels_and_lengths(1, partitions)
+            if columns is None
+            else (columns, None)
+        )
+        return kw
+
+    def _prepare_frame_to_broadcast(self, axis, indices):
+        """
+        Compute the indices to broadcast `self` considering `indices`.
+
+        Parameters
+        ----------
+        axis : {0, 1}
+            Axis to broadcast along.
+        indices : dict
+            Dict of indices and internal indices of partitions where `self` must
+            be broadcasted.
+
+        Returns
+        -------
+        dict
+            Dictionary with indices of partitions to broadcast.
+
+        Notes
+        -----
+        New dictionary of indices of `self` partitions represents that
+        you want to broadcast `self` at specified another partition named `other`. For example,
+        Dictionary {key: {key1: [0, 1], key2: [5]}} means, that in `other`[key] you want to
+        broadcast [self[key1], self[key2]] partitions and internal indices for `self` must be [[0, 1], [5]]
+        """
+        sizes = self.row_lengths if axis else self.column_widths
+        return {key: dict(enumerate(sizes)) for key in indices.keys()}
+
+    def map(
+        self,
+        func: Callable,
+        *,
+        axis: Optional[Union[AxisInt, Axis]] = None,
+        other: Optional["PandasDataframe"] = None,
+        full_axis=False,
+        join_type="left",
+        labels="keep",
+        new_index=None,
+        new_columns=None,
+        apply_indices=None,
+        numeric_indices=None,
+        enumerate_partitions=False,
+        dtypes: Optional[Union[pandas.Series, type]] = None,
+        copy_dtypes: bool = False,
+    ) -> "PandasDataframe":
         """
         Perform a function that maps across the entire dataset.
 
@@ -1654,23 +1733,107 @@ class PandasDataframe(ClassLogger):
         ----------
         func : callable(row|col|cell) -> row|col|cell
             The function to apply.
-        dtypes : dtypes of the result, optional
+        axis : int or modin.core.dataframe.base.utils.Axis, optional
+            The axis to map over. If None, the map will be performed element-wise.
+        other : PandasDataFrame, optional
+            Modin dataframe to broadcast.
+        full_axis : bool, default: False
+            Whether to apply the function to a virtual partition that encompasses the whole axis.
+            If the virtual partitions of this dataframe and ``other`` do not encompass the whole axis,
+            the partitions will be concatenated together before the function is called, and then re-split
+            after it returns.
+        join_type : str, default: "left"
+            Type of join to apply.
+        labels : {"keep", "replace", "drop"}, default: "keep"
+            Whether keep labels from `self` Modin DataFrame, replace them with labels
+            from joined DataFrame or drop altogether to make them be computed lazily later.
+        new_index : list-like, optional
+            Index of the result. We may know this in advance, and if not provided it must be computed.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        new_columns : list-like, optional
+            Columns of the result. We may know this in advance, and if not provided it must be computed.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        apply_indices : list-like, optional
+            Labels of `axis ^ 1` to apply ``func`` over. Mutually exclusive from ``numeric_indices``.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        numeric_indices : list-like, optional
+            Numeric indices to apply ``func`` over. Mutually exclusive from ``apply_indices``.
+        enumerate_partitions : bool, default: False
+            Whether pass partition index into applied `func` or not.
+            Note that `func` must be able to obtain `partition_idx` kwarg.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        dtypes : pandas.Series or scalar type, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
             type, and this allows us to avoid (re)computing it.
+            If the argument is a scalar type, then that type is assigned to each result column.
+        copy_dtypes : bool, default: False
+            If True, the dtypes of the resulting dataframe are copied from the original,
+            and the ``dtypes`` argument is ignored.
 
         Returns
         -------
         PandasDataframe
             A new dataframe.
         """
-        new_partitions = self._partition_mgr_cls.map_partitions(self._partitions, func)
-        if dtypes == "copy":
+        # Fix for issue #5094
+        if axis == "columns":
+            axis = 1
+        elif axis == "index":
+            axis = 0
+        axis = Axis(axis)
+        if copy_dtypes:
             dtypes = self._dtypes
-        elif dtypes is not None:
+        elif isinstance(dtypes, type) or (
+            isinstance(dtypes, np.dtype) and dtypes.ndim == 0
+        ):
+            # Scalar native type or np dtype was specified, so duplicate it across columns
             dtypes = pandas.Series(
                 [np.dtype(dtypes)] * len(self.columns), index=self.columns
             )
+        if axis == Axis.CELL_WISE:
+            return self._map_cellwise(func, dtypes)
+        else:
+            return self._map_axis(
+                func,
+                axis.value,
+                other,
+                full_axis,
+                join_type,
+                labels,
+                new_index,
+                new_columns,
+                apply_indices,
+                enumerate_partitions,
+                dtypes,
+                copy_dtypes,
+            )
+
+    @lazy_metadata_decorator(apply_axis=None)
+    def _map_cellwise(
+        self,
+        func: Callable,
+        dtypes: Optional[Union[pandas.Series, type]] = None,
+    ) -> "PandasDataframe":
+        """
+        Perform a cell-wise map across the dataframe.
+
+        Parameters
+        ----------
+        func : callable(row|col|cell) -> row|col|cell
+            The function to apply.
+        dtypes : pandas.Series or scalar type, optional
+            The data types for the result. This is an optimization
+            because there are functions that always result in a particular data
+            type, and this allows us to avoid (re)computing it.
+            If the argument is a scalar type, then that type is assigned to each result column.
+
+        Returns
+        -------
+        PandasDataframe
+            New Modin dataframe.
+        """
+        new_partitions = self._partition_mgr_cls.map_partitions(self._partitions, func)
         return self.__constructor__(
             new_partitions,
             self._index_cache,
@@ -1678,6 +1841,334 @@ class PandasDataframe(ClassLogger):
             self._row_lengths_cache,
             self._column_widths_cache,
             dtypes=dtypes,
+        )
+
+    @lazy_metadata_decorator(apply_axis="both")
+    def _map_axis(
+        self,
+        func: Callable,
+        axis: AxisInt,
+        other,
+        full_axis,
+        join_type="left",
+        labels="keep",
+        new_index=None,
+        new_columns=None,
+        apply_indices=None,
+        enumerate_partitions=False,
+        dtypes=None,
+        copy_dtypes=False,
+    ) -> "PandasDataframe":
+        """
+        Broadcast axis partitions of `other` to partitions of `self` and apply a function.
+
+        Parameters
+        ----------
+        func : callable
+            Function to apply.
+        axis : {0, 1}
+            Axis to broadcast over.
+        other : PandasDataframe
+            Modin DataFrame to broadcast.
+        full_axis : bool, default: False
+            Whether to apply the function to a virtual partition that encompasses the whole axis.
+            If the virtual partitions of this dataframe and ``other`` do not encompass the whole axis,
+            the partitions will be concatenated together before the function is called, and then re-split
+            after it returns.
+        join_type : str, default: "left"
+            Type of join to apply.
+        labels : {"keep", "replace", "drop"}, default: "keep"
+            Whether keep labels from `self` Modin DataFrame, replace them with labels
+            from joined DataFrame or drop altogether to make them be computed lazily later.
+        new_index : list-like, optional
+            Index of the result. We may know this in advance, and if not provided it must be computed.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        new_columns : list-like, optional
+            Columns of the result. We may know this in advance, and if not provided it must be computed.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        apply_indices : list-like, optional
+            Indices of `axis ^ 1` to apply function over.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        enumerate_partitions : bool, default: False
+            Whether pass partition index into applied `func` or not.
+            Note that `func` must be able to obtain `partition_idx` kwarg.
+            WARNING: This is currently only used when ``full_axis`` is True.
+        dtypes : Optional[pandas.Series], default: None
+            Data types of the result. This is an optimization
+            because there are functions that always result in a particular data
+            type, and allows us to avoid (re)computing it.
+        copy_dtypes : bool, default: False
+            If True, the dtypes of the resulting dataframe are copied from the original,
+            and the ``dtypes`` argument is ignored.
+
+        Returns
+        -------
+        PandasDataframe
+            New Modin DataFrame.
+        """
+        if full_axis:
+            if other is not None:
+                if not isinstance(other, list):
+                    other = [other]
+                other = [o._partitions for o in other] if len(other) else None
+
+            if apply_indices is not None:
+                numeric_indices = self.axes[axis ^ 1].get_indexer_for(apply_indices)
+                apply_indices = self._get_dict_of_block_index(
+                    axis ^ 1, numeric_indices
+                ).keys()
+
+            new_partitions = self._partition_mgr_cls.map_partitions(
+                self._partitions,
+                self._build_treereduce_func(axis, func),
+                axis=axis,
+                other_partitions=other,
+                keep_partitioning=True,
+                apply_indices=apply_indices,
+                enumerate_partitions=enumerate_partitions,
+            )
+            # Index objects for new object creation. This is shorter than if..else
+            kw = self._make_init_labels_args(new_partitions, new_index, new_columns)
+            if copy_dtypes:
+                kw["dtypes"] = self._dtypes
+            elif isinstance(dtypes, type):
+                kw["dtypes"] = pandas.Series(
+                    [np.dtype(dtypes)] * len(kw["columns"]), index=kw["columns"]
+                )
+            result = self.__constructor__(new_partitions, **kw)
+            if new_index is not None:
+                result.synchronize_labels(axis=0)
+            if new_columns is not None:
+                result.synchronize_labels(axis=1)
+            return result
+        else:
+            if copy_dtypes:
+                dtypes = self._dtypes
+            if other is None:
+                new_partitions = self._partition_mgr_cls.map_partitions(
+                    self._partitions, func
+                )
+                return self.__constructor__(
+                    new_partitions,
+                    self.axes[0],
+                    self.axes[1],
+                    self._row_lengths_cache,
+                    self._column_widths_cache,
+                    dtypes=dtypes,
+                )
+            else:
+                # Only sort the indices if they do not match
+                (
+                    left_parts,
+                    right_parts,
+                    joined_index,
+                    partition_sizes_along_axis,
+                ) = self._copartition(
+                    axis,
+                    other,
+                    join_type,
+                    sort=not self.axes[axis].equals(other.axes[axis]),
+                )
+                # unwrap list returned by `copartition`.
+                right_parts = right_parts[0]
+                new_frame = self._partition_mgr_cls.map_partitions(
+                    left_parts, func, axis=axis, other_partitions=right_parts
+                )
+
+                def _pick_axis(get_axis, sizes_cache):
+                    if labels == "keep":
+                        return get_axis(), sizes_cache
+                    if labels == "replace":
+                        return joined_index, partition_sizes_along_axis
+                    assert labels == "drop", f"Unexpected `labels`: {labels}"
+                    return None, None
+
+                if axis == 0:
+                    # Pass shape caches instead of values in order to not trigger shape computation.
+                    new_index, new_row_lengths = _pick_axis(
+                        self._get_index, self._row_lengths_cache
+                    )
+                    new_columns, new_column_widths = (
+                        self.columns,
+                        self._column_widths_cache,
+                    )
+                else:
+                    new_index, new_row_lengths = self.index, self._row_lengths_cache
+                    new_columns, new_column_widths = _pick_axis(
+                        self._get_columns, self._column_widths_cache
+                    )
+
+                return self.__constructor__(
+                    new_frame,
+                    new_index,
+                    new_columns,
+                    new_row_lengths,
+                    new_column_widths,
+                    dtypes=dtypes,
+                )
+
+    @lazy_metadata_decorator(apply_axis="both")
+    def map_select_indices(
+        self,
+        func: Callable,
+        *,
+        axis: AxisInt,
+        other=None,
+        full_axis=False,
+        apply_indices=None,
+        numeric_indices=None,
+        new_index=None,
+        new_columns=None,
+        keep_remaining=False,
+    ) -> "PandasDataframe":
+        """
+        Apply a function over a subset of indices in the dataframe.
+
+        Parameters
+        ----------
+        func : callable
+            Function to apply.
+        axis : {0, 1}
+            Axis to broadcast over.
+        other : PandasDataframe, optional
+            Modin DataFrame to broadcast.
+        full_axis : bool, default: False
+            Whether to apply the function to a virtual partition that encompasses the whole axis.
+            If the virtual partitions of this dataframe and ``other`` do not encompass the whole axis,
+            the partitions will be concatenated together before the function is called, and then re-split
+            after it returns.
+        apply_indices : list-like, optional
+            Labels of `axis ^ 1` to apply over (if `numeric_indices` is not specified).
+        numeric_indices : list-like, optional
+            Numeric indices to apply over (if `apply_indices` is not specified).
+        new_index : list-like, optional
+            Index of the result. We may know this in advance, and if not provided it must be computed.
+        new_columns : list-like, optional
+            Columns of the result. We may know this in advance, and if not provided it must be computed.
+        keep_remaining : bool, default: False
+            Whether drop the data that is not computed over or not.
+
+        Returns
+        -------
+        PandasDataframe
+            New Modin DataFrame.
+        """
+        assert apply_indices is not None or numeric_indices is not None
+        # Fix for issue #5094
+        if axis == "columns":
+            axis = 1
+        elif axis == "index":
+            axis = 0
+        # Convert indices to numeric indices
+        old_index = self.index if axis else self.columns
+        if apply_indices is not None:
+            numeric_indices = old_index.get_indexer_for(apply_indices)
+        # Get the indices for the axis being applied to (it is the opposite of axis
+        # being applied over)
+        dict_indices = self._get_dict_of_block_index(axis ^ 1, numeric_indices)
+        other_indices = (
+            None
+            if other is None
+            else other._prepare_frame_to_broadcast(axis, dict_indices)
+        )
+        new_partitions = self._partition_mgr_cls.map_select_indices(
+            func,
+            axis,
+            self._partitions,
+            None if other is None else other._partitions,
+            full_axis,
+            apply_indices=dict_indices,
+            other_apply_indices=other_indices,
+            keep_remaining=keep_remaining,
+        )
+        # TODO Infer columns and index from `keep_remaining` and `apply_indices`
+        if new_index is None:
+            new_index = self.index if axis == 1 else None
+        if new_columns is None:
+            new_columns = self.columns if axis == 0 else None
+        if other is None and not full_axis:
+            # In non-broadcast full axis operations, the dimensions of the result can be obtained
+            # from the kept partitions
+            #
+            # Length objects for new object creation. This is shorter than if..else
+            # This object determines the lengths and widths based on the given
+            # parameters and builds a dictionary used in the constructor below. 0 gives
+            # the row lengths and 1 gives the column widths. Since the dimension of
+            # `axis` given may have changed, we currently just recompute it.
+            # TODO Determine lengths from current lengths if `keep_remaining=False`
+            lengths = {
+                axis: [len(apply_indices)]
+                if not keep_remaining
+                else [self.row_lengths, self.column_widths][axis],
+                axis ^ 1: [self.row_lengths, self.column_widths][axis ^ 1],
+            }
+            new_row_lengths = lengths[0]
+            new_col_widths = lengths[1]
+        else:
+            new_row_lengths = None
+            new_col_widths = None
+        return self.__constructor__(
+            new_partitions, new_index, new_columns, new_row_lengths, new_col_widths
+        )
+
+    @lazy_metadata_decorator(apply_axis="both")
+    def map_select_indices_both_axes(
+        self,
+        func,
+        row_labels,
+        col_labels,
+        new_index,
+        new_columns,
+        item_to_distribute=no_default,
+    ):
+        """
+        Apply a function for a subset of the data identified by both row and column labels.
+
+        Parameters
+        ----------
+        func : callable
+            The function to apply.
+        row_labels : list-like, default: None
+            The row labels to apply over. Must be provided with
+            `col_labels` to apply over both axes.
+        col_labels : list-like, default: None
+            The column labels to apply over. Must be provided
+            with `row_labels` to apply over both axes.
+        new_index : list-like
+            The index of the result.
+        new_columns : list-like
+            The columns of the result.
+        item_to_distribute : np.ndarray or scalar, default: no_default
+            The item to split up so it can be applied over both axes.
+
+        Returns
+        -------
+        PandasDataframe
+            A new dataframe.
+        """
+        # We are applying over both axes here, so make sure we have all the right
+        # variables set.
+        assert row_labels is not None and col_labels is not None
+        assert item_to_distribute is not no_default
+        row_partitions_list = self._get_dict_of_block_index(0, row_labels).items()
+        col_partitions_list = self._get_dict_of_block_index(1, col_labels).items()
+        new_partitions = self._partition_mgr_cls.map_select_indices_both_axes(
+            self._partitions,
+            func,
+            row_partitions_list,
+            col_partitions_list,
+            item_to_distribute,
+            # Passing caches instead of values in order to not trigger shapes recomputation
+            # if they are not used inside this function.
+            self._row_lengths_cache,
+            self._column_widths_cache,
+        )
+        return self.__constructor__(
+            new_partitions,
+            new_index,
+            new_columns,
+            self._row_lengths_cache,
+            self._column_widths_cache,
         )
 
     def window(
@@ -1736,8 +2227,8 @@ class PandasDataframe(ClassLogger):
         -----
         The data shape is not changed (length and width of the table).
         """
-        new_partitions = self._partition_mgr_cls.map_axis_partitions(
-            axis, self._partitions, func, keep_partitioning=True
+        new_partitions = self._partition_mgr_cls.map_partitions(
+            self._partitions, func, axis=axis, keep_partitioning=True
         )
         return self.__constructor__(
             new_partitions,
@@ -1948,8 +2439,8 @@ class PandasDataframe(ClassLogger):
             Axis.COL_WISE,
         ), "Axis argument to filter operator must be 0 (rows) or 1 (columns)"
 
-        new_partitions = self._partition_mgr_cls.map_axis_partitions(
-            axis.value, self._partitions, condition, keep_partitioning=True
+        new_partitions = self._partition_mgr_cls.map_partitions(
+            self._partitions, condition, axis=axis.value, keep_partitioning=True
         )
 
         new_axes, new_lengths = [0, 0], [0, 0]
@@ -2002,8 +2493,8 @@ class PandasDataframe(ClassLogger):
             A new filtered dataframe.
         """
         axis = Axis(axis)
-        partitions = self._partition_mgr_cls.map_axis_partitions(
-            axis.value, self._partitions, func, keep_partitioning=True
+        partitions = self._partition_mgr_cls.map_partitions(
+            self._partitions, func, axis=axis.value, keep_partitioning=True
         )
         if axis == Axis.COL_WISE:
             new_index, row_lengths = self._compute_axis_labels_and_lengths(
@@ -2018,509 +2509,6 @@ class PandasDataframe(ClassLogger):
         return self.__constructor__(
             partitions, new_index, new_columns, row_lengths, column_widths
         )
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def apply_full_axis(
-        self,
-        axis,
-        func,
-        new_index=None,
-        new_columns=None,
-        dtypes=None,
-    ):
-        """
-        Perform a function across an entire axis.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            The axis to apply over (0 - rows, 1 - columns).
-        func : callable
-            The function to apply.
-        new_index : list-like, optional
-            The index of the result. We may know this in advance,
-            and if not provided it must be computed.
-        new_columns : list-like, optional
-            The columns of the result. We may know this in
-            advance, and if not provided it must be computed.
-        dtypes : list-like, optional
-            The data types of the result. This is an optimization
-            because there are functions that always result in a particular data
-            type, and allows us to avoid (re)computing it.
-
-        Returns
-        -------
-        PandasDataframe
-            A new dataframe.
-
-        Notes
-        -----
-        The data shape may change as a result of the function.
-        """
-        return self.broadcast_apply_full_axis(
-            axis=axis,
-            func=func,
-            new_index=new_index,
-            new_columns=new_columns,
-            dtypes=dtypes,
-            other=None,
-        )
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def apply_full_axis_select_indices(
-        self,
-        axis,
-        func,
-        apply_indices=None,
-        numeric_indices=None,
-        new_index=None,
-        new_columns=None,
-        keep_remaining=False,
-    ):
-        """
-        Apply a function across an entire axis for a subset of the data.
-
-        Parameters
-        ----------
-        axis : int
-            The axis to apply over.
-        func : callable
-            The function to apply.
-        apply_indices : list-like, default: None
-            The labels to apply over.
-        numeric_indices : list-like, default: None
-            The indices to apply over.
-        new_index : list-like, optional
-            The index of the result. We may know this in advance,
-            and if not provided it must be computed.
-        new_columns : list-like, optional
-            The columns of the result. We may know this in
-            advance, and if not provided it must be computed.
-        keep_remaining : boolean, default: False
-            Whether or not to drop the data that is not computed over.
-
-        Returns
-        -------
-        PandasDataframe
-            A new dataframe.
-        """
-        assert apply_indices is not None or numeric_indices is not None
-        # Convert indices to numeric indices
-        old_index = self.index if axis else self.columns
-        if apply_indices is not None:
-            numeric_indices = old_index.get_indexer_for(apply_indices)
-        # Get the indices for the axis being applied to (it is the opposite of axis
-        # being applied over)
-        dict_indices = self._get_dict_of_block_index(axis ^ 1, numeric_indices)
-        new_partitions = (
-            self._partition_mgr_cls.apply_func_to_select_indices_along_full_axis(
-                axis,
-                self._partitions,
-                func,
-                dict_indices,
-                keep_remaining=keep_remaining,
-            )
-        )
-        # TODO Infer columns and index from `keep_remaining` and `apply_indices`
-        if new_index is None:
-            new_index = self.index if axis == 1 else None
-        if new_columns is None:
-            new_columns = self.columns if axis == 0 else None
-        return self.__constructor__(new_partitions, new_index, new_columns, None, None)
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def apply_select_indices(
-        self,
-        axis,
-        func,
-        apply_indices=None,
-        row_labels=None,
-        col_labels=None,
-        new_index=None,
-        new_columns=None,
-        keep_remaining=False,
-        item_to_distribute=no_default,
-    ):
-        """
-        Apply a function for a subset of the data.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            The axis to apply over.
-        func : callable
-            The function to apply.
-        apply_indices : list-like, default: None
-            The labels to apply over. Must be given if axis is provided.
-        row_labels : list-like, default: None
-            The row labels to apply over. Must be provided with
-            `col_labels` to apply over both axes.
-        col_labels : list-like, default: None
-            The column labels to apply over. Must be provided
-            with `row_labels` to apply over both axes.
-        new_index : list-like, optional
-            The index of the result. We may know this in advance,
-            and if not provided it must be computed.
-        new_columns : list-like, optional
-            The columns of the result. We may know this in
-            advance, and if not provided it must be computed.
-        keep_remaining : boolean, default: False
-            Whether or not to drop the data that is not computed over.
-        item_to_distribute : np.ndarray or scalar, default: no_default
-            The item to split up so it can be applied over both axes.
-
-        Returns
-        -------
-        PandasDataframe
-            A new dataframe.
-        """
-        # TODO Infer columns and index from `keep_remaining` and `apply_indices`
-        if new_index is None:
-            new_index = self.index if axis == 1 else None
-        if new_columns is None:
-            new_columns = self.columns if axis == 0 else None
-        if axis is not None:
-            assert apply_indices is not None
-            # Convert indices to numeric indices
-            old_index = self.index if axis else self.columns
-            numeric_indices = old_index.get_indexer_for(apply_indices)
-            # Get indices being applied to (opposite of indices being applied over)
-            dict_indices = self._get_dict_of_block_index(axis ^ 1, numeric_indices)
-            new_partitions = self._partition_mgr_cls.apply_func_to_select_indices(
-                axis,
-                self._partitions,
-                func,
-                dict_indices,
-                keep_remaining=keep_remaining,
-            )
-            # Length objects for new object creation. This is shorter than if..else
-            # This object determines the lengths and widths based on the given
-            # parameters and builds a dictionary used in the constructor below. 0 gives
-            # the row lengths and 1 gives the column widths. Since the dimension of
-            # `axis` given may have changed, we currently just recompute it.
-            # TODO Determine lengths from current lengths if `keep_remaining=False`
-            lengths_objs = {
-                axis: [len(apply_indices)]
-                if not keep_remaining
-                else [self.row_lengths, self.column_widths][axis],
-                axis ^ 1: [self.row_lengths, self.column_widths][axis ^ 1],
-            }
-            return self.__constructor__(
-                new_partitions, new_index, new_columns, lengths_objs[0], lengths_objs[1]
-            )
-        else:
-            # We are applying over both axes here, so make sure we have all the right
-            # variables set.
-            assert row_labels is not None and col_labels is not None
-            assert keep_remaining
-            assert item_to_distribute is not no_default
-            row_partitions_list = self._get_dict_of_block_index(0, row_labels).items()
-            col_partitions_list = self._get_dict_of_block_index(1, col_labels).items()
-            new_partitions = self._partition_mgr_cls.apply_func_to_indices_both_axis(
-                self._partitions,
-                func,
-                row_partitions_list,
-                col_partitions_list,
-                item_to_distribute,
-                # Passing caches instead of values in order to not trigger shapes recomputation
-                # if they are not used inside this function.
-                self._row_lengths_cache,
-                self._column_widths_cache,
-            )
-            return self.__constructor__(
-                new_partitions,
-                new_index,
-                new_columns,
-                self._row_lengths_cache,
-                self._column_widths_cache,
-            )
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def broadcast_apply(
-        self, axis, func, other, join_type="left", labels="keep", dtypes=None
-    ):
-        """
-        Broadcast axis partitions of `other` to partitions of `self` and apply a function.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            Axis to broadcast over.
-        func : callable
-            Function to apply.
-        other : PandasDataframe
-            Modin DataFrame to broadcast.
-        join_type : str, default: "left"
-            Type of join to apply.
-        labels : {"keep", "replace", "drop"}, default: "keep"
-            Whether keep labels from `self` Modin DataFrame, replace them with labels
-            from joined DataFrame or drop altogether to make them be computed lazily later.
-        dtypes : "copy" or None, default: None
-            Whether keep old dtypes or infer new dtypes from data.
-
-        Returns
-        -------
-        PandasDataframe
-            New Modin DataFrame.
-        """
-        # Only sort the indices if they do not match
-        (
-            left_parts,
-            right_parts,
-            joined_index,
-            partition_sizes_along_axis,
-        ) = self._copartition(
-            axis, other, join_type, sort=not self.axes[axis].equals(other.axes[axis])
-        )
-        # unwrap list returned by `copartition`.
-        right_parts = right_parts[0]
-        new_frame = self._partition_mgr_cls.broadcast_apply(
-            axis, func, left_parts, right_parts
-        )
-        if dtypes == "copy":
-            dtypes = self._dtypes
-
-        def _pick_axis(get_axis, sizes_cache):
-            if labels == "keep":
-                return get_axis(), sizes_cache
-            if labels == "replace":
-                return joined_index, partition_sizes_along_axis
-            assert labels == "drop", f"Unexpected `labels`: {labels}"
-            return None, None
-
-        if axis == 0:
-            # Pass shape caches instead of values in order to not trigger shape computation.
-            new_index, new_row_lengths = _pick_axis(
-                self._get_index, self._row_lengths_cache
-            )
-            new_columns, new_column_widths = self.columns, self._column_widths_cache
-        else:
-            new_index, new_row_lengths = self.index, self._row_lengths_cache
-            new_columns, new_column_widths = _pick_axis(
-                self._get_columns, self._column_widths_cache
-            )
-
-        return self.__constructor__(
-            new_frame,
-            new_index,
-            new_columns,
-            new_row_lengths,
-            new_column_widths,
-            dtypes=dtypes,
-        )
-
-    def _prepare_frame_to_broadcast(self, axis, indices, broadcast_all):
-        """
-        Compute the indices to broadcast `self` considering `indices`.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            Axis to broadcast along.
-        indices : dict
-            Dict of indices and internal indices of partitions where `self` must
-            be broadcasted.
-        broadcast_all : bool
-            Whether broadcast the whole axis of `self` frame or just a subset of it.
-
-        Returns
-        -------
-        dict
-            Dictionary with indices of partitions to broadcast.
-
-        Notes
-        -----
-        New dictionary of indices of `self` partitions represents that
-        you want to broadcast `self` at specified another partition named `other`. For example,
-        Dictionary {key: {key1: [0, 1], key2: [5]}} means, that in `other`[key] you want to
-        broadcast [self[key1], self[key2]] partitions and internal indices for `self` must be [[0, 1], [5]]
-        """
-        if broadcast_all:
-            sizes = self.row_lengths if axis else self.column_widths
-            return {key: dict(enumerate(sizes)) for key in indices.keys()}
-        passed_len = 0
-        result_dict = {}
-        for part_num, internal in indices.items():
-            result_dict[part_num] = self._get_dict_of_block_index(
-                axis ^ 1, np.arange(passed_len, passed_len + len(internal))
-            )
-            passed_len += len(internal)
-        return result_dict
-
-    def __make_init_labels_args(self, partitions, index, columns) -> dict:
-        kw = {}
-        kw["index"], kw["row_lengths"] = (
-            self._compute_axis_labels_and_lengths(0, partitions)
-            if index is None
-            else (index, None)
-        )
-        kw["columns"], kw["column_widths"] = (
-            self._compute_axis_labels_and_lengths(1, partitions)
-            if columns is None
-            else (columns, None)
-        )
-        return kw
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def broadcast_apply_select_indices(
-        self,
-        axis,
-        func,
-        other,
-        apply_indices=None,
-        numeric_indices=None,
-        keep_remaining=False,
-        broadcast_all=True,
-        new_index=None,
-        new_columns=None,
-    ):
-        """
-        Apply a function to select indices at specified axis and broadcast partitions of `other` Modin DataFrame.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            Axis to apply function along.
-        func : callable
-            Function to apply.
-        other : PandasDataframe
-            Partitions of which should be broadcasted.
-        apply_indices : list, default: None
-            List of labels to apply (if `numeric_indices` are not specified).
-        numeric_indices : list, default: None
-            Numeric indices to apply (if `apply_indices` are not specified).
-        keep_remaining : bool, default: False
-            Whether drop the data that is not computed over or not.
-        broadcast_all : bool, default: True
-            Whether broadcast the whole axis of right frame to every
-            partition or just a subset of it.
-        new_index : pandas.Index, optional
-            Index of the result. We may know this in advance,
-            and if not provided it must be computed.
-        new_columns : pandas.Index, optional
-            Columns of the result. We may know this in advance,
-            and if not provided it must be computed.
-
-        Returns
-        -------
-        PandasDataframe
-            New Modin DataFrame.
-        """
-        assert (
-            apply_indices is not None or numeric_indices is not None
-        ), "Indices to apply must be specified!"
-
-        if other is None:
-            if apply_indices is None:
-                apply_indices = self.axes[axis][numeric_indices]
-            return self.apply_select_indices(
-                axis=axis,
-                func=func,
-                apply_indices=apply_indices,
-                keep_remaining=keep_remaining,
-                new_index=new_index,
-                new_columns=new_columns,
-            )
-
-        if numeric_indices is None:
-            old_index = self.index if axis else self.columns
-            numeric_indices = old_index.get_indexer_for(apply_indices)
-
-        dict_indices = self._get_dict_of_block_index(axis ^ 1, numeric_indices)
-        broadcasted_dict = other._prepare_frame_to_broadcast(
-            axis, dict_indices, broadcast_all=broadcast_all
-        )
-        new_partitions = self._partition_mgr_cls.broadcast_apply_select_indices(
-            axis,
-            func,
-            self._partitions,
-            other._partitions,
-            dict_indices,
-            broadcasted_dict,
-            keep_remaining,
-        )
-
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        return self.__constructor__(new_partitions, **kw)
-
-    @lazy_metadata_decorator(apply_axis="both")
-    def broadcast_apply_full_axis(
-        self,
-        axis,
-        func,
-        other,
-        new_index=None,
-        new_columns=None,
-        apply_indices=None,
-        enumerate_partitions=False,
-        dtypes=None,
-    ):
-        """
-        Broadcast partitions of `other` Modin DataFrame and apply a function along full axis.
-
-        Parameters
-        ----------
-        axis : {0, 1}
-            Axis to apply over (0 - rows, 1 - columns).
-        func : callable
-            Function to apply.
-        other : PandasDataframe or list
-            Modin DataFrame(s) to broadcast.
-        new_index : list-like, optional
-            Index of the result. We may know this in advance,
-            and if not provided it must be computed.
-        new_columns : list-like, optional
-            Columns of the result. We may know this in
-            advance, and if not provided it must be computed.
-        apply_indices : list-like, default: None
-            Indices of `axis ^ 1` to apply function over.
-        enumerate_partitions : bool, default: False
-            Whether pass partition index into applied `func` or not.
-            Note that `func` must be able to obtain `partition_idx` kwarg.
-        dtypes : list-like, default: None
-            Data types of the result. This is an optimization
-            because there are functions that always result in a particular data
-            type, and allows us to avoid (re)computing it.
-
-        Returns
-        -------
-        PandasDataframe
-            New Modin DataFrame.
-        """
-        if other is not None:
-            if not isinstance(other, list):
-                other = [other]
-            other = [o._partitions for o in other] if len(other) else None
-
-        if apply_indices is not None:
-            numeric_indices = self.axes[axis ^ 1].get_indexer_for(apply_indices)
-            apply_indices = self._get_dict_of_block_index(
-                axis ^ 1, numeric_indices
-            ).keys()
-
-        new_partitions = self._partition_mgr_cls.broadcast_axis_partitions(
-            axis=axis,
-            left=self._partitions,
-            right=other,
-            apply_func=self._build_treereduce_func(axis, func),
-            apply_indices=apply_indices,
-            enumerate_partitions=enumerate_partitions,
-            keep_partitioning=True,
-        )
-        # Index objects for new object creation. This is shorter than if..else
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
-        if dtypes == "copy":
-            kw["dtypes"] = self._dtypes
-        elif dtypes is not None:
-            kw["dtypes"] = pandas.Series(
-                [np.dtype(dtypes)] * len(kw["columns"]), index=kw["columns"]
-            )
-        result = self.__constructor__(new_partitions, **kw)
-        if new_index is not None:
-            result.synchronize_labels(axis=0)
-        if new_columns is not None:
-            result.synchronize_labels(axis=1)
-        return result
 
     def _copartition(self, axis, other, how, sort, force_repartition=False):
         """
@@ -2595,10 +2583,10 @@ class PandasDataframe(ClassLogger):
         # Also define length of base and frames. We will need to know the
         # lengths for alignment.
         if do_repartition_base:
-            reindexed_base = base_frame._partition_mgr_cls.map_axis_partitions(
-                axis,
+            reindexed_base = base_frame._partition_mgr_cls.map_partitions(
                 base_frame._partitions,
                 make_reindexer(do_reindex_base, base_frame_idx),
+                axis=axis,
             )
             if axis:
                 base_lengths = [obj.width() for obj in reindexed_base[0]]
@@ -2630,10 +2618,10 @@ class PandasDataframe(ClassLogger):
                 # indices of others frame start from `base_frame_idx` + 1
                 reindexed_other_list[i] = other_frames[
                     i
-                ]._partition_mgr_cls.map_axis_partitions(
-                    axis,
+                ]._partition_mgr_cls.map_partitions(
                     other_frames[i]._partitions,
                     make_reindexer(do_repartition_others[i], base_frame_idx + 1 + i),
+                    axis=axis,
                     lengths=base_lengths,
                 )
             else:
@@ -2708,7 +2696,7 @@ class PandasDataframe(ClassLogger):
     @lazy_metadata_decorator(apply_axis="both")
     def concat(
         self,
-        axis: Union[int, Axis],
+        axis: Union[AxisInt, Axis],
         others: Union["PandasDataframe", List["PandasDataframe"]],
         how,
         sort,
@@ -2929,7 +2917,7 @@ class PandasDataframe(ClassLogger):
         new_partitions = self._partition_mgr_cls.groupby_reduce(
             axis, self._partitions, by_parts, map_func, reduce_func, apply_indices
         )
-        kw = self.__make_init_labels_args(new_partitions, new_index, new_columns)
+        kw = self._make_init_labels_args(new_partitions, new_index, new_columns)
         return self.__constructor__(new_partitions, **kw)
 
     @classmethod

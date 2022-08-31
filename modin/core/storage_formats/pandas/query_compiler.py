@@ -476,7 +476,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
                 return pandas.merge(left, right, **kwargs)
 
             new_self = self.__constructor__(
-                self._modin_frame.apply_full_axis(1, map_func)
+                self._modin_frame.map(map_func, axis=1, full_axis=True)
             )
             is_reset_index = True
             if left_on and right_on:
@@ -521,7 +521,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
                 return pandas_dataframe_join(left, right, **kwargs)
 
             new_self = self.__constructor__(
-                self._modin_frame.apply_full_axis(1, map_func)
+                self._modin_frame.map(map_func, axis=1, full_axis=True)
             )
             return new_self.sort_rows_by_column_values(on) if sort else new_self
         else:
@@ -533,9 +533,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
     def reindex(self, axis, labels, **kwargs):
         new_index = self.index if axis else labels
         new_columns = labels if axis else self.columns
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = self._modin_frame.map(
             lambda df: df.reindex(labels=labels, axis=axis, **kwargs),
+            axis=axis,
+            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -890,8 +891,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
             else:
                 return val
 
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis=0, func=map_func, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map(
+            func=map_func, axis=0, full_axis=True, new_columns=new_columns
         )
         return self.__constructor__(new_modin_frame)
 
@@ -1183,13 +1184,14 @@ class PandasQueryCompiler(BaseQueryCompiler):
             )(self, axis)
 
     def rolling_aggregate(self, axis, rolling_args, func, *args, **kwargs):
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = self._modin_frame.map(
             lambda df: pandas.DataFrame(
                 df.rolling(*rolling_args[0], **rolling_args[1]).aggregate(
                     func=func, *args, **kwargs
                 )
             ),
+            axis=axis,
+            full_axis=True,
             new_index=self.index,
         )
         return self.__constructor__(new_modin_frame)
@@ -1254,8 +1256,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             obj = self
 
-        new_modin_frame = obj._modin_frame.apply_full_axis(
-            axis, map_func, new_columns=new_columns
+        new_modin_frame = obj._modin_frame.map(
+            map_func, axis=axis, full_axis=True, new_columns=new_columns
         )
         result = self.__constructor__(new_modin_frame)
 
@@ -1358,29 +1360,33 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_columns = None
 
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            1,
+        new_modin_frame = self._modin_frame.map(
             lambda df: pandas.DataFrame(df.stack(level=level, dropna=dropna)),
+            axis=1,
+            full_axis=True,
             new_columns=new_columns,
         )
         return self.__constructor__(new_modin_frame)
 
     # Map partitions operations
     # These operations are operations that apply a function to every partition.
-    abs = Map.register(pandas.DataFrame.abs, dtypes="copy")
+    # Though all these operations are element-wise, some can be sped up by mapping across a row/col
+    abs = Map.register(pandas.DataFrame.abs, copy_dtypes=True, axis=0)
     applymap = Map.register(pandas.DataFrame.applymap)
-    conj = Map.register(lambda df, *args, **kwargs: pandas.DataFrame(np.conj(df)))
-    convert_dtypes = Map.register(pandas_convert_dtypes)
-    invert = Map.register(pandas.DataFrame.__invert__)
-    isin = Map.register(pandas.DataFrame.isin, dtypes=np.bool_)
-    isna = Map.register(pandas.DataFrame.isna, dtypes=np.bool_)
-    _isfinite = Map.register(
-        lambda df, *args, **kwargs: pandas.DataFrame(np.isfinite(df))
+    conj = Map.register(
+        lambda df, *args, **kwargs: pandas.DataFrame(np.conj(df)), axis=0
     )
-    negative = Map.register(pandas.DataFrame.__neg__)
-    notna = Map.register(pandas.DataFrame.notna, dtypes=np.bool_)
-    round = Map.register(pandas.DataFrame.round)
-    replace = Map.register(pandas.DataFrame.replace)
+    convert_dtypes = Map.register(pandas_convert_dtypes)
+    invert = Map.register(pandas.DataFrame.__invert__, copy_dtypes=True, axis=0)
+    isin = Map.register(pandas.DataFrame.isin, dtypes=np.bool_, axis=0)
+    isna = Map.register(pandas.DataFrame.isna, dtypes=np.bool_, axis=0)
+    _isfinite = Map.register(
+        lambda df, *args, **kwargs: pandas.DataFrame(np.isfinite(df)), axis=0
+    )
+    negative = Map.register(pandas.DataFrame.__neg__, copy_dtypes=True, axis=0)
+    notna = Map.register(pandas.DataFrame.notna, dtypes=np.bool_, axis=0)
+    round = Map.register(pandas.DataFrame.round, copy_dtypes=True, axis=0)
+    replace = Map.register(pandas.DataFrame.replace, axis=0)
     series_view = Map.register(
         lambda df, *args, **kwargs: pandas.DataFrame(
             df.squeeze(axis=1).view(*args, **kwargs)
@@ -1395,67 +1401,70 @@ class PandasQueryCompiler(BaseQueryCompiler):
         lambda s, *args, **kwargs: pandas.to_timedelta(
             s.squeeze(axis=1), *args, **kwargs
         ).to_frame(),
-        dtypes="timedelta64[ns]",
+        dtypes=np.dtype("timedelta64[ns]"),
     )
 
     # END Map partitions operations
 
     # String map partitions operations
 
-    str_capitalize = Map.register(_str_map("capitalize"), dtypes="copy")
-    str_center = Map.register(_str_map("center"), dtypes="copy")
-    str_contains = Map.register(_str_map("contains"), dtypes=np.bool_)
-    str_count = Map.register(_str_map("count"), dtypes=int)
-    str_endswith = Map.register(_str_map("endswith"), dtypes=np.bool_)
-    str_find = Map.register(_str_map("find"), dtypes="copy")
-    str_findall = Map.register(_str_map("findall"), dtypes="copy")
-    str_get = Map.register(_str_map("get"), dtypes="copy")
-    str_index = Map.register(_str_map("index"), dtypes="copy")
-    str_isalnum = Map.register(_str_map("isalnum"), dtypes=np.bool_)
-    str_isalpha = Map.register(_str_map("isalpha"), dtypes=np.bool_)
-    str_isdecimal = Map.register(_str_map("isdecimal"), dtypes=np.bool_)
-    str_isdigit = Map.register(_str_map("isdigit"), dtypes=np.bool_)
-    str_islower = Map.register(_str_map("islower"), dtypes=np.bool_)
-    str_isnumeric = Map.register(_str_map("isnumeric"), dtypes=np.bool_)
-    str_isspace = Map.register(_str_map("isspace"), dtypes=np.bool_)
-    str_istitle = Map.register(_str_map("istitle"), dtypes=np.bool_)
-    str_isupper = Map.register(_str_map("isupper"), dtypes=np.bool_)
-    str_join = Map.register(_str_map("join"), dtypes="copy")
-    str_len = Map.register(_str_map("len"), dtypes=int)
-    str_ljust = Map.register(_str_map("ljust"), dtypes="copy")
-    str_lower = Map.register(_str_map("lower"), dtypes="copy")
-    str_lstrip = Map.register(_str_map("lstrip"), dtypes="copy")
-    str_match = Map.register(_str_map("match"), dtypes="copy")
-    str_normalize = Map.register(_str_map("normalize"), dtypes="copy")
-    str_pad = Map.register(_str_map("pad"), dtypes="copy")
-    str_partition = Map.register(_str_map("partition"), dtypes="copy")
-    str_repeat = Map.register(_str_map("repeat"), dtypes="copy")
-    str_replace = Map.register(_str_map("replace"), dtypes="copy")
-    str_rfind = Map.register(_str_map("rfind"), dtypes="copy")
-    str_rindex = Map.register(_str_map("rindex"), dtypes="copy")
-    str_rjust = Map.register(_str_map("rjust"), dtypes="copy")
-    str_rpartition = Map.register(_str_map("rpartition"), dtypes="copy")
-    str_rsplit = Map.register(_str_map("rsplit"), dtypes="copy")
-    str_rstrip = Map.register(_str_map("rstrip"), dtypes="copy")
-    str_slice = Map.register(_str_map("slice"), dtypes="copy")
-    str_slice_replace = Map.register(_str_map("slice_replace"), dtypes="copy")
-    str_split = Map.register(_str_map("split"), dtypes="copy")
-    str_startswith = Map.register(_str_map("startswith"), dtypes=np.bool_)
-    str_strip = Map.register(_str_map("strip"), dtypes="copy")
-    str_swapcase = Map.register(_str_map("swapcase"), dtypes="copy")
-    str_title = Map.register(_str_map("title"), dtypes="copy")
-    str_translate = Map.register(_str_map("translate"), dtypes="copy")
-    str_upper = Map.register(_str_map("upper"), dtypes="copy")
-    str_wrap = Map.register(_str_map("wrap"), dtypes="copy")
-    str_zfill = Map.register(_str_map("zfill"), dtypes="copy")
-    str___getitem__ = Map.register(_str_map("__getitem__"), dtypes="copy")
+    str_capitalize = Map.register(_str_map("capitalize"), copy_dtypes=True, axis=0)
+    str_center = Map.register(_str_map("center"), copy_dtypes=True, axis=0)
+    str_contains = Map.register(_str_map("contains"), dtypes=np.bool_, axis=0)
+    str_count = Map.register(_str_map("count"), dtypes=int, axis=0)
+    str_endswith = Map.register(_str_map("endswith"), dtypes=np.bool_, axis=0)
+    str_find = Map.register(_str_map("find"), copy_dtypes=True, axis=0)
+    str_findall = Map.register(_str_map("findall"), copy_dtypes=True, axis=0)
+    str_get = Map.register(_str_map("get"), copy_dtypes=True, axis=0)
+    str_index = Map.register(_str_map("index"), copy_dtypes=True, axis=0)
+    str_isalnum = Map.register(_str_map("isalnum"), dtypes=np.bool_, axis=0)
+    str_isalpha = Map.register(_str_map("isalpha"), dtypes=np.bool_, axis=0)
+    str_isdecimal = Map.register(_str_map("isdecimal"), dtypes=np.bool_, axis=0)
+    str_isdigit = Map.register(_str_map("isdigit"), dtypes=np.bool_, axis=0)
+    str_islower = Map.register(_str_map("islower"), dtypes=np.bool_, axis=0)
+    str_isnumeric = Map.register(_str_map("isnumeric"), dtypes=np.bool_, axis=0)
+    str_isspace = Map.register(_str_map("isspace"), dtypes=np.bool_, axis=0)
+    str_istitle = Map.register(_str_map("istitle"), dtypes=np.bool_, axis=0)
+    str_isupper = Map.register(_str_map("isupper"), dtypes=np.bool_, axis=0)
+    str_join = Map.register(_str_map("join"), copy_dtypes=True, axis=0)
+    str_len = Map.register(_str_map("len"), dtypes=int, axis=0)
+    str_ljust = Map.register(_str_map("ljust"), copy_dtypes=True, axis=0)
+    str_lower = Map.register(_str_map("lower"), copy_dtypes=True, axis=0)
+    str_lstrip = Map.register(_str_map("lstrip"), copy_dtypes=True, axis=0)
+    str_match = Map.register(_str_map("match"), copy_dtypes=True, axis=0)
+    str_normalize = Map.register(_str_map("normalize"), copy_dtypes=True, axis=0)
+    str_pad = Map.register(_str_map("pad"), copy_dtypes=True, axis=0)
+    str_partition = Map.register(_str_map("partition"), copy_dtypes=True, axis=0)
+    str_repeat = Map.register(_str_map("repeat"), copy_dtypes=True, axis=0)
+    str_replace = Map.register(_str_map("replace"), copy_dtypes=True, axis=0)
+    str_rfind = Map.register(_str_map("rfind"), copy_dtypes=True, axis=0)
+    str_rindex = Map.register(_str_map("rindex"), copy_dtypes=True, axis=0)
+    str_rjust = Map.register(_str_map("rjust"), copy_dtypes=True, axis=0)
+    str_rpartition = Map.register(_str_map("rpartition"), copy_dtypes=True, axis=0)
+    str_rsplit = Map.register(_str_map("rsplit"), copy_dtypes=True, axis=0)
+    str_rstrip = Map.register(_str_map("rstrip"), copy_dtypes=True, axis=0)
+    str_slice = Map.register(_str_map("slice"), copy_dtypes=True, axis=0)
+    str_slice_replace = Map.register(
+        _str_map("slice_replace"), copy_dtypes=True, axis=0
+    )
+    str_split = Map.register(_str_map("split"), copy_dtypes=True, axis=0)
+    str_startswith = Map.register(_str_map("startswith"), dtypes=np.bool_, axis=0)
+    str_strip = Map.register(_str_map("strip"), copy_dtypes=True, axis=0)
+    str_swapcase = Map.register(_str_map("swapcase"), copy_dtypes=True, axis=0)
+    str_title = Map.register(_str_map("title"), copy_dtypes=True, axis=0)
+    str_translate = Map.register(_str_map("translate"), copy_dtypes=True, axis=0)
+    str_upper = Map.register(_str_map("upper"), copy_dtypes=True, axis=0)
+    str_wrap = Map.register(_str_map("wrap"), copy_dtypes=True, axis=0)
+    str_zfill = Map.register(_str_map("zfill"), copy_dtypes=True, axis=0)
+    str___getitem__ = Map.register(_str_map("__getitem__"), copy_dtypes=True)
 
     # END String map partitions operations
 
     def unique(self):
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            0,
+        new_modin_frame = self._modin_frame.map(
             lambda x: x.squeeze(axis=1).unique(),
+            axis=0,
+            full_axis=True,
             new_columns=self.columns,
         )
         return self.__constructor__(new_modin_frame)
@@ -1472,34 +1481,46 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
     # Dt map partitions operations
 
-    dt_date = Map.register(_dt_prop_map("date"), dtypes=np.object_)
-    dt_time = Map.register(_dt_prop_map("time"), dtypes=np.object_)
-    dt_timetz = Map.register(_dt_prop_map("timetz"), dtypes=np.object_)
-    dt_year = Map.register(_dt_prop_map("year"), dtypes=np.int64)
-    dt_month = Map.register(_dt_prop_map("month"), dtypes=np.int64)
-    dt_day = Map.register(_dt_prop_map("day"), dtypes=np.int64)
-    dt_hour = Map.register(_dt_prop_map("hour"), dtypes=np.int64)
-    dt_minute = Map.register(_dt_prop_map("minute"), dtypes=np.int64)
-    dt_second = Map.register(_dt_prop_map("second"), dtypes=np.int64)
-    dt_microsecond = Map.register(_dt_prop_map("microsecond"), dtypes=np.int64)
-    dt_nanosecond = Map.register(_dt_prop_map("nanosecond"), dtypes=np.int64)
-    dt_week = Map.register(_dt_prop_map("week"), dtypes=np.int64)
-    dt_weekofyear = Map.register(_dt_prop_map("weekofyear"), dtypes=np.int64)
-    dt_dayofweek = Map.register(_dt_prop_map("dayofweek"), dtypes=np.int64)
-    dt_weekday = Map.register(_dt_prop_map("weekday"), dtypes=np.int64)
-    dt_dayofyear = Map.register(_dt_prop_map("dayofyear"), dtypes=np.int64)
-    dt_quarter = Map.register(_dt_prop_map("quarter"), dtypes=np.int64)
-    dt_is_month_start = Map.register(_dt_prop_map("is_month_start"), dtypes=np.bool_)
-    dt_is_month_end = Map.register(_dt_prop_map("is_month_end"), dtypes=np.bool_)
-    dt_is_quarter_start = Map.register(
-        _dt_prop_map("is_quarter_start"), dtypes=np.bool_
+    dt_date = Map.register(_dt_prop_map("date"), dtypes=np.object_, axis=0)
+    dt_time = Map.register(_dt_prop_map("time"), dtypes=np.object_, axis=0)
+    dt_timetz = Map.register(_dt_prop_map("timetz"), dtypes=np.object_, axis=0)
+    dt_year = Map.register(_dt_prop_map("year"), dtypes=np.int64, axis=0)
+    dt_month = Map.register(_dt_prop_map("month"), dtypes=np.int64, axis=0)
+    dt_day = Map.register(_dt_prop_map("day"), dtypes=np.int64, axis=0)
+    dt_hour = Map.register(_dt_prop_map("hour"), dtypes=np.int64, axis=0)
+    dt_minute = Map.register(_dt_prop_map("minute"), dtypes=np.int64, axis=0)
+    dt_second = Map.register(_dt_prop_map("second"), dtypes=np.int64, axis=0)
+    dt_microsecond = Map.register(_dt_prop_map("microsecond"), dtypes=np.int64, axis=0)
+    dt_nanosecond = Map.register(_dt_prop_map("nanosecond"), dtypes=np.int64, axis=0)
+    dt_week = Map.register(_dt_prop_map("week"), dtypes=np.int64, axis=0)
+    dt_weekofyear = Map.register(_dt_prop_map("weekofyear"), dtypes=np.int64, axis=0)
+    dt_dayofweek = Map.register(_dt_prop_map("dayofweek"), dtypes=np.int64, axis=0)
+    dt_weekday = Map.register(_dt_prop_map("weekday"), dtypes=np.int64, axis=0)
+    dt_dayofyear = Map.register(_dt_prop_map("dayofyear"), dtypes=np.int64, axis=0)
+    dt_quarter = Map.register(_dt_prop_map("quarter"), dtypes=np.int64, axis=0)
+    dt_is_month_start = Map.register(
+        _dt_prop_map("is_month_start"), dtypes=np.bool_, axis=0
     )
-    dt_is_quarter_end = Map.register(_dt_prop_map("is_quarter_end"), dtypes=np.bool_)
-    dt_is_year_start = Map.register(_dt_prop_map("is_year_start"), dtypes=np.bool_)
-    dt_is_year_end = Map.register(_dt_prop_map("is_year_end"), dtypes=np.bool_)
-    dt_is_leap_year = Map.register(_dt_prop_map("is_leap_year"), dtypes=np.bool_)
-    dt_daysinmonth = Map.register(_dt_prop_map("daysinmonth"), dtypes=np.int64)
-    dt_days_in_month = Map.register(_dt_prop_map("days_in_month"), dtypes=np.int64)
+    dt_is_month_end = Map.register(
+        _dt_prop_map("is_month_end"), dtypes=np.bool_, axis=0
+    )
+    dt_is_quarter_start = Map.register(
+        _dt_prop_map("is_quarter_start"), dtypes=np.bool_, axis=0
+    )
+    dt_is_quarter_end = Map.register(
+        _dt_prop_map("is_quarter_end"), dtypes=np.bool_, axis=0
+    )
+    dt_is_year_start = Map.register(
+        _dt_prop_map("is_year_start"), dtypes=np.bool_, axis=0
+    )
+    dt_is_year_end = Map.register(_dt_prop_map("is_year_end"), dtypes=np.bool_, axis=0)
+    dt_is_leap_year = Map.register(
+        _dt_prop_map("is_leap_year"), dtypes=np.bool_, axis=0
+    )
+    dt_daysinmonth = Map.register(_dt_prop_map("daysinmonth"), dtypes=np.int64, axis=0)
+    dt_days_in_month = Map.register(
+        _dt_prop_map("days_in_month"), dtypes=np.int64, axis=0
+    )
 
     def dt_tz(self):
         def datetime_tz(df):
@@ -1513,27 +1534,35 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         return self.default_to_pandas(datetime_freq)
 
-    dt_to_period = Map.register(_dt_func_map("to_period"))
-    dt_to_pydatetime = Map.register(_dt_func_map("to_pydatetime"), dtypes=np.object_)
-    dt_tz_localize = Map.register(_dt_func_map("tz_localize"))
-    dt_tz_convert = Map.register(_dt_func_map("tz_convert"))
-    dt_normalize = Map.register(_dt_func_map("normalize"))
-    dt_strftime = Map.register(_dt_func_map("strftime"), dtypes=np.object_)
-    dt_round = Map.register(_dt_func_map("round"))
-    dt_floor = Map.register(_dt_func_map("floor"))
-    dt_ceil = Map.register(_dt_func_map("ceil"))
-    dt_month_name = Map.register(_dt_func_map("month_name"), dtypes=np.object_)
-    dt_day_name = Map.register(_dt_func_map("day_name"), dtypes=np.object_)
-    dt_to_pytimedelta = Map.register(_dt_func_map("to_pytimedelta"), dtypes=np.object_)
-    dt_total_seconds = Map.register(_dt_func_map("total_seconds"), dtypes=np.float64)
-    dt_seconds = Map.register(_dt_prop_map("seconds"), dtypes=np.int64)
-    dt_days = Map.register(_dt_prop_map("days"), dtypes=np.int64)
-    dt_microseconds = Map.register(_dt_prop_map("microseconds"), dtypes=np.int64)
-    dt_nanoseconds = Map.register(_dt_prop_map("nanoseconds"), dtypes=np.int64)
-    dt_qyear = Map.register(_dt_prop_map("qyear"), dtypes=np.int64)
-    dt_start_time = Map.register(_dt_prop_map("start_time"))
-    dt_end_time = Map.register(_dt_prop_map("end_time"))
-    dt_to_timestamp = Map.register(_dt_func_map("to_timestamp"))
+    dt_to_period = Map.register(_dt_func_map("to_period"), axis=0)
+    dt_to_pydatetime = Map.register(
+        _dt_func_map("to_pydatetime"), dtypes=np.object_, axis=0
+    )
+    dt_tz_localize = Map.register(_dt_func_map("tz_localize"), axis=0)
+    dt_tz_convert = Map.register(_dt_func_map("tz_convert"), axis=0)
+    dt_normalize = Map.register(_dt_func_map("normalize"), axis=0)
+    dt_strftime = Map.register(_dt_func_map("strftime"), dtypes=np.object_, axis=0)
+    dt_round = Map.register(_dt_func_map("round"), axis=0)
+    dt_floor = Map.register(_dt_func_map("floor"), axis=0)
+    dt_ceil = Map.register(_dt_func_map("ceil"), axis=0)
+    dt_month_name = Map.register(_dt_func_map("month_name"), dtypes=np.object_, axis=0)
+    dt_day_name = Map.register(_dt_func_map("day_name"), dtypes=np.object_, axis=0)
+    dt_to_pytimedelta = Map.register(
+        _dt_func_map("to_pytimedelta"), dtypes=np.object_, axis=0
+    )
+    dt_total_seconds = Map.register(
+        _dt_func_map("total_seconds"), dtypes=np.float64, axis=0
+    )
+    dt_seconds = Map.register(_dt_prop_map("seconds"), dtypes=np.int64, axis=0)
+    dt_days = Map.register(_dt_prop_map("days"), dtypes=np.int64, axis=0)
+    dt_microseconds = Map.register(
+        _dt_prop_map("microseconds"), dtypes=np.int64, axis=0
+    )
+    dt_nanoseconds = Map.register(_dt_prop_map("nanoseconds"), dtypes=np.int64, axis=0)
+    dt_qyear = Map.register(_dt_prop_map("qyear"), dtypes=np.int64, axis=0)
+    dt_start_time = Map.register(_dt_prop_map("start_time"), axis=0)
+    dt_end_time = Map.register(_dt_prop_map("end_time"), axis=0)
+    dt_to_timestamp = Map.register(_dt_func_map("to_timestamp"), axis=0)
 
     # END Dt map partitions operations
 
@@ -1561,6 +1590,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
             .to_pandas()
             .squeeze()
         )
+        if np.isnan(first_result):
+            return None
         return self.index[first_result]
 
     def last_valid_index(self):
@@ -1573,13 +1604,15 @@ class PandasQueryCompiler(BaseQueryCompiler):
         # We get the maximum from each column, then take the max of that to get
         # last_valid_index. The `to_pandas()` here is just for a single value and
         # `squeeze` will convert it to a scalar.
-        first_result = (
+        last_result = (
             self.__constructor__(self._modin_frame.reduce(0, last_valid_index_builder))
             .max(axis=1)
             .to_pandas()
             .squeeze()
         )
-        return self.index[first_result]
+        if np.isnan(last_result):
+            return None
+        return self.index[last_result]
 
     # END Column/Row partitions reduce operations
 
@@ -1622,10 +1655,11 @@ class PandasQueryCompiler(BaseQueryCompiler):
             return df.iloc[:, internal_indices].describe(**kwargs).reindex(new_index)
 
         return self.__constructor__(
-            self._modin_frame.apply_full_axis_select_indices(
-                0,
+            self._modin_frame.map_select_indices(
                 describe_builder,
-                empty_df.columns,
+                axis=0,
+                full_axis=True,
+                apply_indices=empty_df.columns,
                 new_index=new_index,
                 new_columns=empty_df.columns,
             )
@@ -1740,8 +1774,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         columns = self.columns
         index = columns.copy()
         transponed_self = self.transpose()
-        new_modin_frame = transponed_self._modin_frame.apply_full_axis(
-            1, map_func, new_index=index, new_columns=columns
+        new_modin_frame = transponed_self._modin_frame.map(
+            map_func, axis=1, full_axis=True, new_index=index, new_columns=columns
         )
         return transponed_self.__constructor__(new_modin_frame)
 
@@ -1777,8 +1811,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
             new_columns = [MODIN_UNNAMED_SERIES_LABEL] if num_cols == 1 else None
             axis = 1
 
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis, map_func, new_index=new_index, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map(
+            map_func,
+            axis=axis,
+            full_axis=True,
+            new_index=new_index,
+            new_columns=new_columns,
         )
         return self.__constructor__(new_modin_frame)
 
@@ -1825,8 +1863,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_columns = self.columns
 
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis=0, func=map_func, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map(
+            func=map_func, axis=0, full_axis=True, new_columns=new_columns
         )
         return self.__constructor__(new_modin_frame)
 
@@ -1852,9 +1890,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
             )
         else:
             new_columns = empty_eval.columns
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            1,
+        new_modin_frame = self._modin_frame.map(
             lambda df: pandas.DataFrame(df.eval(expr, inplace=False, **kwargs)),
+            axis=1,
+            full_axis=True,
             new_index=self.index,
             new_columns=new_columns,
         )
@@ -1882,8 +1921,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_index = self.index
             new_columns = pandas.RangeIndex(len(self.columns))
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis, mode_builder, new_index=new_index, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map(
+            mode_builder,
+            axis=axis,
+            full_axis=True,
+            new_index=new_index,
+            new_columns=new_columns,
         )
         return self.__constructor__(new_modin_frame).dropna(axis=axis, how="all")
 
@@ -1906,8 +1949,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
                         # correct behavior.
                         return series.squeeze(axis=1).fillna(value=value, **kwargs)
 
-                    new_modin_frame = self._modin_frame.apply_full_axis(
-                        0, fillna_builder
+                    new_modin_frame = self._modin_frame.map(
+                        fillna_builder, axis=0, full_axis=True
                     )
                 else:
 
@@ -1939,8 +1982,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
                     def fillna_builder(df, r):
                         return df.fillna(value=r, **kwargs)
 
-                    new_modin_frame = self._modin_frame.broadcast_apply(
-                        0, fillna_builder, value._modin_frame
+                    new_modin_frame = self._modin_frame.map(
+                        fillna_builder,
+                        axis=0,
+                        other=value._modin_frame,
                     )
                     return self.__constructor__(new_modin_frame)
 
@@ -2010,9 +2055,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
             new_columns = pandas.Float64Index(q)
         else:
             q_index = pandas.Float64Index(q)
-        new_modin_frame = query_compiler._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = query_compiler._modin_frame.map(
             lambda df: quantile_builder(df, **kwargs),
+            axis=axis,
+            full_axis=True,
             new_index=q_index,
             new_columns=new_columns,
             dtypes=np.float64,
@@ -2029,9 +2075,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
     def rank(self, **kwargs):
         axis = kwargs.get("axis", 0)
         numeric_only = True if axis else kwargs.get("numeric_only", False)
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = self._modin_frame.map(
             lambda df: df.rank(**kwargs),
+            axis=axis,
+            full_axis=True,
             new_index=self.index,
             new_columns=self.columns if not numeric_only else None,
             dtypes=np.float64,
@@ -2066,14 +2113,15 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_index = self.index.to_frame().sort_index(**kwargs).index
             new_columns = self.columns
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = self._modin_frame.map(
             lambda df: df.sort_index(
                 axis=axis, level=level, sort_remaining=sort_remaining, **kwargs
             ),
-            new_index,
-            new_columns,
-            dtypes="copy" if axis == 0 else None,
+            axis=axis,
+            full_axis=True,
+            new_index=new_index,
+            new_columns=new_columns,
+            copy_dtypes=axis == 0,
         )
         return self.__constructor__(new_modin_frame)
 
@@ -2149,11 +2197,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
             )
 
         # we have no able to calculate correct indices here, so making it `dummy_index`
-        inconsistent_frame = self._modin_frame.broadcast_apply_select_indices(
-            axis=0,
-            apply_indices=value_vars,
+        inconsistent_frame = self._modin_frame.map_select_indices(
             func=applyier,
+            axis=0,
             other=to_broadcast,
+            full_axis=False,
+            apply_indices=value_vars,
             new_index=["dummy_index"] * len(id_vars),
             new_columns=["dummy_index"] * len(id_vars),
         )
@@ -2206,7 +2255,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
             # ones are just of bool dtype
             if len(key.dtypes) == 1 and is_bool_dtype(key.dtypes[0]):
                 self.__validate_bool_indexer(key.index)
-                return self.__getitem_bool(key, broadcast=True, dtypes="copy")
+                return self.__getitem_bool(key, broadcast=True, copy_dtypes=True)
 
             key = key.to_pandas().squeeze(axis=1)
 
@@ -2314,26 +2363,17 @@ class PandasQueryCompiler(BaseQueryCompiler):
             idx = self.get_axis(axis ^ 1).get_indexer_for([key])[0]
             return self.insert_item(axis ^ 1, idx, value, how, replace=True)
 
-        # TODO: rework by passing list-like values to `apply_select_indices`
+        # TODO: rework by passing list-like values to
         # as an item to distribute
-        if is_list_like(value):
-            new_modin_frame = self._modin_frame.apply_full_axis_select_indices(
-                axis,
-                setitem_builder,
-                [key],
-                new_index=self.index,
-                new_columns=self.columns,
-                keep_remaining=True,
-            )
-        else:
-            new_modin_frame = self._modin_frame.apply_select_indices(
-                axis,
-                setitem_builder,
-                [key],
-                new_index=self.index,
-                new_columns=self.columns,
-                keep_remaining=True,
-            )
+        new_modin_frame = self._modin_frame.map_select_indices(
+            setitem_builder,
+            axis=axis,
+            full_axis=is_list_like(value),
+            apply_indices=[key],
+            new_index=self.index,
+            new_columns=self.columns,
+            keep_remaining=True,
+        )
         return self.__constructor__(new_modin_frame)
 
     # END __getitem__ methods
@@ -2393,11 +2433,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
             df.insert(internal_idx, column, value)
             return df
 
-        # TODO: rework by passing list-like values to `apply_select_indices`
+        # TODO: rework by passing list-like values to
         # as an item to distribute
-        new_modin_frame = self._modin_frame.apply_full_axis_select_indices(
-            0,
+        new_modin_frame = self._modin_frame.map_select_indices(
             insert,
+            axis=0,
+            full_axis=True,
             numeric_indices=[loc],
             keep_remaining=True,
             new_index=self.index,
@@ -2433,14 +2474,14 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         assert self.is_series_like()
 
-        # We use apply_full_axis here instead of map since the latter assumes that the
-        # shape of the DataFrame does not change. However, it is possible for functions
-        # applied to Series objects to end up creating DataFrames. It is possible that
-        # using apply_full_axis is much less performant compared to using a variant of
-        # map.
+        # We full_axis=True here it is possible for functions applied to Series objects to end up
+        # creating DataFrames, changing the result's shape. It is possible that
+        # using full_axis=True is much less performant compared to full_axis=False.
         return self.__constructor__(
-            self._modin_frame.apply_full_axis(
-                1, lambda df: df.squeeze(axis=1).apply(func, *args, **kwargs)
+            self._modin_frame.map(
+                lambda df: df.squeeze(axis=1).apply(func, *args, **kwargs),
+                axis=1,
+                full_axis=True,
             )
         )
 
@@ -2475,8 +2516,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         func = {k: wrap_udf_function(v) if callable(v) else v for k, v in func.items()}
         return self.__constructor__(
-            self._modin_frame.apply_full_axis_select_indices(
-                axis, dict_apply_builder, func, keep_remaining=False
+            self._modin_frame.map_select_indices(
+                dict_apply_builder,
+                axis=axis,
+                full_axis=True,
+                apply_indices=func,
+                keep_remaining=False,
             )
         )
 
@@ -2513,9 +2558,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
             else self.columns
         )
         func = [wrap_udf_function(f) if callable(f) else f for f in func]
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis,
+        new_modin_frame = self._modin_frame.map(
             lambda df: pandas.DataFrame(df.apply(func, axis, *args, **kwargs)),
+            axis=axis,
+            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -2546,8 +2592,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
         if callable(func):
             func = wrap_udf_function(func)
 
-        new_modin_frame = self._modin_frame.apply_full_axis(
-            axis, lambda df: df.apply(func, axis=axis, *args, **kwargs)
+        new_modin_frame = self._modin_frame.map(
+            lambda df: df.apply(func, axis=axis, *args, **kwargs),
+            axis=axis,
+            full_axis=True,
         )
         return self.__constructor__(new_modin_frame)
 
@@ -2982,11 +3030,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         apply_indices = list(agg_func.keys()) if isinstance(agg_func, dict) else None
 
-        new_modin_frame = self._modin_frame.broadcast_apply_full_axis(
-            axis=axis,
+        new_modin_frame = self._modin_frame.map(
             func=lambda df, by=None, partition_idx=None: groupby_agg_builder(
                 df, by, drop, partition_idx
             ),
+            axis=axis,
+            full_axis=True,
             other=broadcastable_by,
             apply_indices=apply_indices,
             enumerate_partitions=True,
@@ -3049,9 +3098,10 @@ class PandasQueryCompiler(BaseQueryCompiler):
             obj.index = index
 
         reindexed = self.__constructor__(
-            obj._modin_frame.apply_full_axis(
-                1,
+            obj._modin_frame.map(
                 lambda df: df.set_index(to_reindex, append=(len(to_reindex) == 1)),
+                axis=1,
+                full_axis=True,
                 new_columns=obj.columns.drop(to_reindex),
             )
         )
@@ -3141,8 +3191,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
             return result
 
         result = self.__constructor__(
-            to_group._modin_frame.broadcast_apply_full_axis(
-                axis=0, func=applyier, other=keys_columns._modin_frame
+            to_group._modin_frame.map(
+                func=applyier, axis=0, full_axis=True, other=keys_columns._modin_frame
             )
         )
 
@@ -3177,15 +3227,21 @@ class PandasQueryCompiler(BaseQueryCompiler):
         # efficient if we are mapping over all of the data to do it this way
         # than it would be to reuse the code for specific columns.
         if len(columns) == len(self.columns):
-            new_modin_frame = self._modin_frame.apply_full_axis(
-                0, lambda df: pandas.get_dummies(df, **kwargs), new_index=self.index
+            new_modin_frame = self._modin_frame.map(
+                lambda df: pandas.get_dummies(df, **kwargs),
+                axis=0,
+                full_axis=True,
+                new_index=self.index,
             )
             untouched_frame = None
         else:
             new_modin_frame = self._modin_frame.take_2d_labels_or_positional(
                 col_labels=columns
-            ).apply_full_axis(
-                0, lambda df: pandas.get_dummies(df, **kwargs), new_index=self.index
+            ).map(
+                lambda df: pandas.get_dummies(df, **kwargs),
+                axis=0,
+                full_axis=True,
+                new_index=self.index,
             )
             untouched_frame = self.drop(columns=columns)
         # If we mapped over all the data we are done. If not, we need to
@@ -3234,14 +3290,12 @@ class PandasQueryCompiler(BaseQueryCompiler):
             partition.iloc[row_internal_indices, col_internal_indices] = item
             return partition
 
-        new_modin_frame = self._modin_frame.apply_select_indices(
-            axis=None,
+        new_modin_frame = self._modin_frame.map_select_indices_both_axes(
             func=iloc_mut,
             row_labels=row_numeric_index,
             col_labels=col_numeric_index,
             new_index=self.index,
             new_columns=self.columns,
-            keep_remaining=True,
             item_to_distribute=broadcasted_items,
         )
         return self.__constructor__(new_modin_frame)
@@ -3307,16 +3361,17 @@ class PandasQueryCompiler(BaseQueryCompiler):
             ser = df.iloc[:, 0]
             return ser.cat.codes
 
-        res = self._modin_frame.apply_full_axis(axis=0, func=func)
+        res = self._modin_frame.map(func=func, axis=0, full_axis=True)
         return self.__constructor__(res)
 
     # END Cat operations
 
     def compare(self, other, **kwargs):
         return self.__constructor__(
-            self._modin_frame.broadcast_apply_full_axis(
-                0,
+            self._modin_frame.map(
                 lambda l, r: pandas_compare(l, other=r, **kwargs),
-                other._modin_frame,
+                axis=0,
+                full_axis=True,
+                other=other._modin_frame,
             )
         )
