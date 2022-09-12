@@ -13,14 +13,17 @@
 
 """Contains utility functions for frame partitioning."""
 
+from typing import Any, Iterator, Optional, Literal, List, Union
+
 from modin.config import MinPartitionSize
 import contextlib
 import numpy as np
+import numpy.typing as npt
 import pandas
 
 
 @contextlib.contextmanager
-def _nullcontext(dummy_value=None):  # noqa: PR01
+def _nullcontext(dummy_value: Any = None) -> Iterator[Any]:  # noqa: PR01
     """
     Act as a replacement for contextlib.nullcontext missing in older Python.
 
@@ -31,7 +34,9 @@ def _nullcontext(dummy_value=None):  # noqa: PR01
     yield dummy_value
 
 
-def compute_chunksize(axis_len, num_splits, min_block_size=None):
+def compute_chunksize(
+    axis_len: int, num_splits: int, min_block_size: Optional[int] = None
+) -> int:
     """
     Compute the number of elements (rows/columns) to include in each partition.
 
@@ -65,7 +70,12 @@ def compute_chunksize(axis_len, num_splits, min_block_size=None):
     return max(chunksize, min_block_size)
 
 
-def split_result_of_axis_func_pandas(axis, num_splits, result, length_list=None):
+def split_result_of_axis_func_pandas(
+    axis: Literal[0, 1],
+    num_splits: int,
+    result: pandas.DataFrame,
+    length_list: Optional[List[int]] = None,
+) -> List[pandas.DataFrame]:
     """
     Split pandas DataFrame evenly based on the provided number of splits.
 
@@ -104,7 +114,7 @@ def split_result_of_axis_func_pandas(axis, num_splits, result, length_list=None)
         return [result.iloc[:, sums[i] : sums[i + 1]] for i in range(len(sums) - 1)]
 
 
-def length_fn_pandas(df):
+def length_fn_pandas(df: pandas.DataFrame) -> int:
     """
     Compute number of rows of passed `pandas.DataFrame`.
 
@@ -120,7 +130,7 @@ def length_fn_pandas(df):
     return len(df) if len(df) > 0 else 0
 
 
-def width_fn_pandas(df):
+def width_fn_pandas(df: pandas.DataFrame) -> int:
     """
     Compute number of columns of passed `pandas.DataFrame`.
 
