@@ -18,6 +18,7 @@ Module houses `FileDispatcher` class.
 for direct files processing.
 """
 
+from typing import Any, Tuple, Union, Optional, Type
 import fsspec
 import os
 from modin.config import StorageFormat
@@ -62,13 +63,19 @@ class OpenFile:
         Keywords arguments to be passed into ``fsspec.open`` function.
     """
 
-    def __init__(self, file_path, mode="rb", compression="infer", **kwargs):
+    def __init__(
+        self,
+        file_path: str,
+        mode: str = "rb",
+        compression: str = "infer",
+        **kwargs: Any,
+    ) -> None:
         self.file_path = file_path
         self.mode = mode
         self.compression = compression
         self.kwargs = kwargs
 
-    def __enter__(self):
+    def __enter__(self) -> fsspec.core.OpenFile:
         """
         Open the file with fsspec and return the opened file.
 
@@ -77,6 +84,7 @@ class OpenFile:
         fsspec.core.OpenFile
             The opened file.
         """
+        credential_error_type: Tuple[Type, ...]
         try:
             from botocore.exceptions import NoCredentialsError
 
@@ -97,7 +105,7 @@ class OpenFile:
             self.file = fsspec.open(*args, **self.kwargs)
         return self.file.open()
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         """
         Close the file.
 
@@ -129,7 +137,7 @@ class FileDispatcher(ClassLogger):
     query_compiler_cls = None
 
     @classmethod
-    def read(cls, *args, **kwargs):
+    def read(cls, *args: Any, **kwargs: Any):  # type: ignore
         """
         Read data according passed `args` and `kwargs`.
 
@@ -175,7 +183,7 @@ class FileDispatcher(ClassLogger):
         return query_compiler
 
     @classmethod
-    def _read(cls, *args, **kwargs):
+    def _read(cls, *args: Any, **kwargs: Any) -> fsspec.core.OpenFile:
         """
         Perform reading of the data from file.
 
@@ -191,7 +199,9 @@ class FileDispatcher(ClassLogger):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
     @classmethod
-    def get_path(cls, file_path):
+    def get_path(
+        cls, file_path: Union[str, os.PathLike[str]]
+    ) -> Union[str, os.PathLike[str]]:
         """
         Process `file_path` in accordance to it's type.
 
@@ -217,7 +227,7 @@ class FileDispatcher(ClassLogger):
             return os.path.abspath(file_path)
 
     @classmethod
-    def file_size(cls, f):
+    def file_size(cls, f: fsspec.core.OpenFile) -> int:
         """
         Get the size of file associated with file handle `f`.
 
@@ -238,7 +248,9 @@ class FileDispatcher(ClassLogger):
         return size
 
     @classmethod
-    def file_exists(cls, file_path, storage_options=None):
+    def file_exists(
+        cls, file_path: str, storage_options: Optional[dict] = None
+    ) -> bool:
         """
         Check if `file_path` exists.
 
@@ -312,7 +324,9 @@ class FileDispatcher(ClassLogger):
         raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
 
     @classmethod
-    def build_partition(cls, partition_ids, row_lengths, column_widths):
+    def build_partition(
+        cls, partition_ids: list, row_lengths: list, column_widths: list
+    ) -> np.ndarray:
         """
         Build array with partitions of `cls.frame_partition_cls` class.
 
@@ -346,5 +360,5 @@ class FileDispatcher(ClassLogger):
         )
 
     @classmethod
-    def _file_not_found_msg(cls, filename: str):  # noqa: GL08
+    def _file_not_found_msg(cls, filename: str) -> str:  # noqa: GL08
         return f"No such file: '{filename}'"

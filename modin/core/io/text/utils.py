@@ -13,6 +13,8 @@
 
 """Contains utility functions for dispatchers."""
 
+from typing import Iterator, BinaryIO
+
 import io
 
 
@@ -28,12 +30,12 @@ class CustomNewlineIterator:
         Byte or sequence of bytes indicating line endings.
     """
 
-    def __init__(self, _file, newline):
+    def __init__(self, _file: BinaryIO, newline: bytes) -> None:
         self.file = _file
         self.newline = newline
         self.bytes_read = self.chunk_size = 0
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[bytes]:
         """
         Iterate over lines.
 
@@ -58,6 +60,6 @@ class CustomNewlineIterator:
                 # last line can be read without newline bytes
                 chunk = lines[-1] + chunk
 
-    def seek(self):
+    def seek(self) -> None:
         """Change the stream positition to where the last returned line ends."""
         self.file.seek(self.bytes_read - self.chunk_size, 1)
