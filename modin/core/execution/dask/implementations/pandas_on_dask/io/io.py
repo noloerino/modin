@@ -15,9 +15,10 @@
 
 from modin.core.io import BaseIO
 from modin.core.storage_formats.pandas.query_compiler import PandasQueryCompiler
-from modin.core.execution.dask.implementations.pandas_on_dask.dataframe.dataframe import (
-    PandasOnDaskDataframe,
-)
+# from modin.core.execution.dask.implementations.pandas_on_dask.dataframe.dataframe import (
+#     PandasOnDaskDataframe,
+# )
+from query_composition.querytree_pandas_on_dask_dataframe import PandasOnDaskDataframe
 from modin.core.execution.dask.implementations.pandas_on_dask.partitioning.partition import (
     PandasOnDaskDataframePartition,
 )

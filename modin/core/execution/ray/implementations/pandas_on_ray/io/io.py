@@ -40,7 +40,8 @@ from modin.core.storage_formats.pandas.parsers import (
     PandasExcelParser,
 )
 from modin.core.execution.ray.common import RayWrapper, SignalActor
-from ..dataframe import PandasOnRayDataframe
+#from ..dataframe import PandasOnRayDataframe
+from query_composition.querytree_pandas_on_ray_dataframe import PandasOnRayDataframe
 from ..partitioning import PandasOnRayDataframePartition
 
 

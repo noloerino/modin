@@ -13,6 +13,7 @@
 
 """Base Modin Dataframe class optimized for pandas on Ray execution."""
 
-from .dataframe import PandasOnRayDataframe
+#from .dataframe import PandasOnRayDataframe
+from query_composition.querytree_pandas_on_ray_dataframe import PandasOnRayDataframe
 
 __all__ = ["PandasOnRayDataframe"]
