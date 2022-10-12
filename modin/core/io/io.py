@@ -17,6 +17,8 @@ Module houses `BaseIO` class.
 `BaseIO` is base class for IO classes, that stores IO functions.
 """
 
+from collections import defaultdict # UNUSED IMPORT PLEASE REMOVE LATER
+
 from collections import OrderedDict
 from typing import Any
 
