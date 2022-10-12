@@ -376,7 +376,9 @@ class DataFrame(DataFrameCompat, BasePandasDataset):
             broadcast=None,
             raw=raw,
             reduce=None,
-            result_type=result_type,
+            # Because result_type is used for post-processing the type (series or DF),
+            # we don't want to pass it to the partitions here
+            result_type=None,
             convert_dtype=None,
             args=args,
             **kwargs,
@@ -385,18 +387,20 @@ class DataFrame(DataFrameCompat, BasePandasDataset):
             # A scalar was returned
             return query_compiler
 
-        if result_type == "reduce":
-            output_type = Series
-        elif result_type == "broadcast":
+        if result_type == "broadcast":
             output_type = DataFrame
-        # the 'else' branch also handles 'result_type == "expand"' since it makes the output type
-        # depend on the `func` result (Series for a scalar, DataFrame for list-like)
         else:
+            # For result_type="expand", "reduce", or None, the output type depends on the dimension
+            # of the result
             reduced_index = pandas.Index([MODIN_UNNAMED_SERIES_LABEL])
             if query_compiler.get_axis(axis).equals(
                 reduced_index
             ) or query_compiler.get_axis(axis ^ 1).equals(reduced_index):
-                output_type = Series
+                if result_type == "reduce" or result_type is None:
+                    output_type = Series
+                else:
+                    # result_type should be "expand"
+                    output_type = DataFrame
             else:
                 output_type = DataFrame
 

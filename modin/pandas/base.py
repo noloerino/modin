@@ -819,14 +819,15 @@ class BasePandasDataset(BasePandasDatasetCompat):
         """
         Apply a function along an axis of the `BasePandasDataset`.
         """
-
+        if result_type not in (None, "reduce", "broadcast", "expand"):
+            raise ValueError("invalid value for result_type, must be one of {None, 'reduce', 'broadcast', 'expand'}")
+            
         def error_raiser(msg, exception):
             """Convert passed exception to the same type as pandas do and raise it."""
             # HACK: to concord with pandas error types by replacing all of the
             # TypeErrors to the AssertionErrors
             exception = exception if exception is not TypeError else AssertionError
             raise exception(msg)
-
         self._validate_function(func, on_invalid=error_raiser)
         axis = self._get_axis_number(axis)
         if isinstance(func, str):

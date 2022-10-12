@@ -173,6 +173,53 @@ def test_apply_text_func_with_level(level, data, func, axis):
         **func_kwargs,
     )
 
+@pytest.mark.parametrize("data", test_data_values, ids=test_data_keys)
+def test_apply_result_type(data):
+    # See issue #4665 https://github.com/modin-project/modin/issues/4665
+    # Modin result should be DataFrame rather than series, since the result has
+    # multiple columns
+    modin_df = pd.DataFrame(data)
+    pandas_df = pandas.DataFrame(data)
+    modin_result = modin_df.apply(np.square, result_type="reduce")
+    pandas_result = pandas_df.apply(np.square, result_type="reduce")
+    assert isinstance(pandas_result, pandas.DataFrame)
+    assert isinstance(modin_result, pd.DataFrame)
+    df_equals(modin_result, pandas_result)
+    # Modin result should be a series since the result is a single row
+    modin_result = modin_df.apply(np.sum, axis=0, result_type="reduce")
+    pandas_result = pandas_df.apply(np.sum, axis=0, result_type="reduce")
+    assert isinstance(pandas_result, pandas.Series)
+    assert isinstance(modin_result, pd.Series)
+    df_equals(modin_result, pandas_result)
+    # Modin result should be Series since the result is a single column
+    modin_result = modin_df.apply(np.sum, axis=1, result_type="reduce")
+    pandas_result = pandas_df.apply(np.sum, axis=1, result_type="reduce")
+    assert isinstance(pandas_result, pandas.Series)
+    assert isinstance(modin_result, pd.Series)
+    df_equals(modin_result, pandas_result)
+    # Modin result should be inferred to be Series in both these cases with result_type=None
+    modin_result = modin_df.apply(np.sum, axis=1)
+    pandas_result = pandas_df.apply(np.sum, axis=1)
+    assert isinstance(pandas_result, pandas.Series)
+    assert isinstance(modin_result, pd.Series)
+    df_equals(modin_result, pandas_result)
+    modin_result = modin_df.apply(np.sum)
+    pandas_result = pandas_df.apply(np.sum)
+    assert isinstance(pandas_result, pandas.Series)
+    assert isinstance(modin_result, pd.Series)
+    df_equals(modin_result, pandas_result)
+    # The difference between result_type=None and result_type="reduce"
+    # is that the former expands to a DF when the function returns a Series
+    modin_result = modin_df.apply(lambda df: pd.Series([1]))
+    pandas_result = pandas_df.apply(lambda df: pandas.Series([1]))
+    assert isinstance(pandas_result, pandas.DataFrame)
+    assert isinstance(modin_result, pd.DataFrame)
+    df_equals(modin_result, pandas_result)
+    modin_result = modin_df.apply(lambda df: pd.Series([1]), result_type="reduce")
+    pandas_result = pandas_df.apply(lambda df: pandas.Series([1]), result_type="reduce")
+    assert isinstance(pandas_result, pandas.Series)
+    assert isinstance(modin_result, pd.Series)
+    df_equals(modin_result, pandas_result)
 
 @pytest.mark.parametrize(
     "column", ["A", ["A", "C"]], ids=arg_keys("column", ["A", ["A", "C"]])
