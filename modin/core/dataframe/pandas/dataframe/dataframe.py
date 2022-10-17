@@ -52,12 +52,6 @@ if TYPE_CHECKING:
         ProtocolDataframe,
     )
     from pandas._typing import npt
-    from modin.core.dataframe.pandas.partitioning import (
-        PandasDataframePartition,
-        PandasDataframeAxisPartition,
-    )
-
-    Partition = Union[PandasDataframeAxisPartition, PandasDataframePartition]
 
 from modin.pandas.indexing import is_range_like
 from modin.pandas.utils import is_full_grab_slice, check_both_not_none
@@ -1018,13 +1012,13 @@ class PandasDataframe(ClassLogger):
             return result
 
         new_parts = self._partition_mgr_cls.map_select_indices(
-            from_labels_executor,
-            0,
             self._partitions,
-            None,
-            False,
-            [0],
-            None,
+            from_labels_executor,
+            axis=0,
+            other=None,
+            full_axis=False,
+            apply_indices=[0],
+            other_apply_indices=None,
             keep_remaining=True,
         )
         new_column_widths = [
@@ -1590,7 +1584,7 @@ class PandasDataframe(ClassLogger):
     def reduce(
         self,
         axis: Union[int, Axis],
-        function: Callable[["Partition"], object],
+        function: Callable,
         *,
         dtypes: Optional[pandas.Series] = None,
     ) -> "PandasDataframe":
@@ -1628,8 +1622,8 @@ class PandasDataframe(ClassLogger):
     def tree_reduce(
         self,
         axis: Union[int, Axis],
-        map_func: Callable[["Partition"], "Partition"],
-        reduce_func: Optional[Callable[["Partition"], object]] = None,
+        map_func: Callable,
+        reduce_func: Optional[Callable] = None,
         *,
         dtypes: Optional[pandas.Series] = None,
     ) -> "PandasDataframe":
@@ -1776,11 +1770,6 @@ class PandasDataframe(ClassLogger):
         PandasDataframe
             A new dataframe.
         """
-        # Fix for issue #5094
-        if axis == "columns":
-            axis = 1
-        elif axis == "index":
-            axis = 0
         axis = Axis(axis)
         if copy_dtypes:
             dtypes = self._dtypes
@@ -1797,16 +1786,16 @@ class PandasDataframe(ClassLogger):
             return self._map_axis(
                 func,
                 axis.value,
-                other,
-                full_axis,
-                join_type,
-                labels,
-                new_index,
-                new_columns,
-                apply_indices,
-                enumerate_partitions,
-                dtypes,
-                copy_dtypes,
+                other=other,
+                full_axis=full_axis,
+                join_type=join_type,
+                labels=labels,
+                new_index=new_index,
+                new_columns=new_columns,
+                apply_indices=apply_indices,
+                enumerate_partitions=enumerate_partitions,
+                dtypes=dtypes,
+                copy_dtypes=copy_dtypes,
             )
 
     @lazy_metadata_decorator(apply_axis=None)
@@ -1848,6 +1837,7 @@ class PandasDataframe(ClassLogger):
         self,
         func: Callable,
         axis: AxisInt,
+        *,
         other,
         full_axis,
         join_type="left",
@@ -2054,11 +2044,6 @@ class PandasDataframe(ClassLogger):
             New Modin DataFrame.
         """
         assert apply_indices is not None or numeric_indices is not None
-        # Fix for issue #5094
-        if axis == "columns":
-            axis = 1
-        elif axis == "index":
-            axis = 0
         # Convert indices to numeric indices
         old_index = self.index if axis else self.columns
         if apply_indices is not None:
@@ -2072,11 +2057,11 @@ class PandasDataframe(ClassLogger):
             else other._prepare_frame_to_broadcast(axis, dict_indices)
         )
         new_partitions = self._partition_mgr_cls.map_select_indices(
-            func,
-            axis,
             self._partitions,
-            None if other is None else other._partitions,
-            full_axis,
+            func,
+            axis=axis,
+            other_partitions=None if other is None else other._partitions,
+            full_axis=full_axis,
             apply_indices=dict_indices,
             other_apply_indices=other_indices,
             keep_remaining=keep_remaining,

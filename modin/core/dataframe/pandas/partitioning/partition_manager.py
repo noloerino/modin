@@ -467,9 +467,10 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
     @wait_computations_if_benchmark_mode
     def map_select_indices(
         cls,
-        func,
-        axis,
         partitions,
+        func,
+        *,
+        axis,
         other_partitions,
         full_axis,
         apply_indices,
