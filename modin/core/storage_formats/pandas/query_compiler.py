@@ -476,7 +476,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
                 return pandas.merge(left, right, **kwargs)
 
             new_self = self.__constructor__(
-                self._modin_frame.map(map_func, axis=1, full_axis=True)
+                self._modin_frame.map_full_axis(map_func, axis=1)
             )
             is_reset_index = True
             if left_on and right_on:
@@ -521,7 +521,7 @@ class PandasQueryCompiler(BaseQueryCompiler):
                 return pandas_dataframe_join(left, right, **kwargs)
 
             new_self = self.__constructor__(
-                self._modin_frame.map(map_func, axis=1, full_axis=True)
+                self._modin_frame.map_full_axis(map_func, axis=1)
             )
             return new_self.sort_rows_by_column_values(on) if sort else new_self
         else:
@@ -533,10 +533,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
     def reindex(self, axis, labels, **kwargs):
         new_index = self.index if axis else labels
         new_columns = labels if axis else self.columns
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: df.reindex(labels=labels, axis=axis, **kwargs),
             axis=axis,
-            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -891,8 +890,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
             else:
                 return val
 
-        new_modin_frame = self._modin_frame.map(
-            func=map_func, axis=0, full_axis=True, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map_full_axis(
+            func=map_func, axis=0, new_columns=new_columns
         )
         return self.__constructor__(new_modin_frame)
 
@@ -1184,14 +1183,13 @@ class PandasQueryCompiler(BaseQueryCompiler):
             )(self, axis)
 
     def rolling_aggregate(self, axis, rolling_args, func, *args, **kwargs):
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: pandas.DataFrame(
                 df.rolling(*rolling_args[0], **rolling_args[1]).aggregate(
                     func=func, *args, **kwargs
                 )
             ),
             axis=axis,
-            full_axis=True,
             new_index=self.index,
         )
         return self.__constructor__(new_modin_frame)
@@ -1256,8 +1254,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             obj = self
 
-        new_modin_frame = obj._modin_frame.map(
-            map_func, axis=axis, full_axis=True, new_columns=new_columns
+        new_modin_frame = obj._modin_frame.map_full_axis(
+            map_func, axis=axis, new_columns=new_columns
         )
         result = self.__constructor__(new_modin_frame)
 
@@ -1360,10 +1358,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_columns = None
 
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: pandas.DataFrame(df.stack(level=level, dropna=dropna)),
             axis=1,
-            full_axis=True,
             new_columns=new_columns,
         )
         return self.__constructor__(new_modin_frame)
@@ -1461,10 +1458,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
     # END String map partitions operations
 
     def unique(self):
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda x: x.squeeze(axis=1).unique(),
             axis=0,
-            full_axis=True,
             new_columns=self.columns,
         )
         return self.__constructor__(new_modin_frame)
@@ -1774,8 +1770,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         columns = self.columns
         index = columns.copy()
         transponed_self = self.transpose()
-        new_modin_frame = transponed_self._modin_frame.map(
-            map_func, axis=1, full_axis=True, new_index=index, new_columns=columns
+        new_modin_frame = transponed_self._modin_frame.map_full_axis(
+            map_func, axis=1, new_index=index, new_columns=columns
         )
         return transponed_self.__constructor__(new_modin_frame)
 
@@ -1811,10 +1807,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
             new_columns = [MODIN_UNNAMED_SERIES_LABEL] if num_cols == 1 else None
             axis = 1
 
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             map_func,
             axis=axis,
-            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -1863,8 +1858,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_columns = self.columns
 
-        new_modin_frame = self._modin_frame.map(
-            func=map_func, axis=0, full_axis=True, new_columns=new_columns
+        new_modin_frame = self._modin_frame.map_full_axis(
+            func=map_func, axis=0, new_columns=new_columns
         )
         return self.__constructor__(new_modin_frame)
 
@@ -1890,10 +1885,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
             )
         else:
             new_columns = empty_eval.columns
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: pandas.DataFrame(df.eval(expr, inplace=False, **kwargs)),
             axis=1,
-            full_axis=True,
             new_index=self.index,
             new_columns=new_columns,
         )
@@ -1921,10 +1915,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_index = self.index
             new_columns = pandas.RangeIndex(len(self.columns))
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             mode_builder,
             axis=axis,
-            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -1949,8 +1942,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
                         # correct behavior.
                         return series.squeeze(axis=1).fillna(value=value, **kwargs)
 
-                    new_modin_frame = self._modin_frame.map(
-                        fillna_builder, axis=0, full_axis=True
+                    new_modin_frame = self._modin_frame.map_full_axis(
+                        fillna_builder, axis=0
                     )
                 else:
 
@@ -2055,10 +2048,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
             new_columns = pandas.Float64Index(q)
         else:
             q_index = pandas.Float64Index(q)
-        new_modin_frame = query_compiler._modin_frame.map(
+        new_modin_frame = query_compiler._modin_frame.map_full_axis(
             lambda df: quantile_builder(df, **kwargs),
             axis=axis,
-            full_axis=True,
             new_index=q_index,
             new_columns=new_columns,
             dtypes=np.float64,
@@ -2075,10 +2067,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
     def rank(self, **kwargs):
         axis = kwargs.get("axis", 0)
         numeric_only = True if axis else kwargs.get("numeric_only", False)
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: df.rank(**kwargs),
             axis=axis,
-            full_axis=True,
             new_index=self.index,
             new_columns=self.columns if not numeric_only else None,
             dtypes=np.float64,
@@ -2113,12 +2104,11 @@ class PandasQueryCompiler(BaseQueryCompiler):
         else:
             new_index = self.index.to_frame().sort_index(**kwargs).index
             new_columns = self.columns
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: df.sort_index(
                 axis=axis, level=level, sort_remaining=sort_remaining, **kwargs
             ),
             axis=axis,
-            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
             copy_dtypes=axis == 0,
@@ -2474,14 +2464,13 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         assert self.is_series_like()
 
-        # We full_axis=True here it is possible for functions applied to Series objects to end up
+        # We map_full_axis here it is possible for functions applied to Series objects to end up
         # creating DataFrames, changing the result's shape. It is possible that
-        # using full_axis=True is much less performant compared to full_axis=False.
+        # using full_axis is much less performant compared to non-full_axis.
         return self.__constructor__(
-            self._modin_frame.map(
+            self._modin_frame.map_full_axis(
                 lambda df: df.squeeze(axis=1).apply(func, *args, **kwargs),
                 axis=1,
-                full_axis=True,
             )
         )
 
@@ -2558,10 +2547,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
             else self.columns
         )
         func = [wrap_udf_function(f) if callable(f) else f for f in func]
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: pandas.DataFrame(df.apply(func, axis, *args, **kwargs)),
             axis=axis,
-            full_axis=True,
             new_index=new_index,
             new_columns=new_columns,
         )
@@ -2592,10 +2580,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
         if callable(func):
             func = wrap_udf_function(func)
 
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             lambda df: df.apply(func, axis=axis, *args, **kwargs),
             axis=axis,
-            full_axis=True,
         )
         return self.__constructor__(new_modin_frame)
 
@@ -3030,12 +3017,11 @@ class PandasQueryCompiler(BaseQueryCompiler):
 
         apply_indices = list(agg_func.keys()) if isinstance(agg_func, dict) else None
 
-        new_modin_frame = self._modin_frame.map(
+        new_modin_frame = self._modin_frame.map_full_axis(
             func=lambda df, by=None, partition_idx=None: groupby_agg_builder(
                 df, by, drop, partition_idx
             ),
             axis=axis,
-            full_axis=True,
             other=broadcastable_by,
             apply_indices=apply_indices,
             enumerate_partitions=True,
@@ -3098,10 +3084,9 @@ class PandasQueryCompiler(BaseQueryCompiler):
             obj.index = index
 
         reindexed = self.__constructor__(
-            obj._modin_frame.map(
+            obj._modin_frame.map_full_axis(
                 lambda df: df.set_index(to_reindex, append=(len(to_reindex) == 1)),
                 axis=1,
-                full_axis=True,
                 new_columns=obj.columns.drop(to_reindex),
             )
         )
@@ -3191,8 +3176,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
             return result
 
         result = self.__constructor__(
-            to_group._modin_frame.map(
-                func=applyier, axis=0, full_axis=True, other=keys_columns._modin_frame
+            to_group._modin_frame.map_full_axis(
+                func=applyier, axis=0, other=keys_columns._modin_frame
             )
         )
 
@@ -3227,20 +3212,18 @@ class PandasQueryCompiler(BaseQueryCompiler):
         # efficient if we are mapping over all of the data to do it this way
         # than it would be to reuse the code for specific columns.
         if len(columns) == len(self.columns):
-            new_modin_frame = self._modin_frame.map(
+            new_modin_frame = self._modin_frame.map_full_axis(
                 lambda df: pandas.get_dummies(df, **kwargs),
                 axis=0,
-                full_axis=True,
                 new_index=self.index,
             )
             untouched_frame = None
         else:
             new_modin_frame = self._modin_frame.take_2d_labels_or_positional(
                 col_labels=columns
-            ).map(
+            ).map_full_axis(
                 lambda df: pandas.get_dummies(df, **kwargs),
                 axis=0,
-                full_axis=True,
                 new_index=self.index,
             )
             untouched_frame = self.drop(columns=columns)
@@ -3361,17 +3344,16 @@ class PandasQueryCompiler(BaseQueryCompiler):
             ser = df.iloc[:, 0]
             return ser.cat.codes
 
-        res = self._modin_frame.map(func=func, axis=0, full_axis=True)
+        res = self._modin_frame.map_full_axis(func=func, axis=0)
         return self.__constructor__(res)
 
     # END Cat operations
 
     def compare(self, other, **kwargs):
         return self.__constructor__(
-            self._modin_frame.map(
+            self._modin_frame.map_full_axis(
                 lambda l, r: pandas_compare(l, other=r, **kwargs),
                 axis=0,
-                full_axis=True,
                 other=other._modin_frame,
             )
         )

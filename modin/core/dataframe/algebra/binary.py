@@ -116,10 +116,9 @@ class Binary(Operator):
                     )
             else:
                 if isinstance(other, (list, np.ndarray, pandas.Series)):
-                    new_modin_frame = query_compiler._modin_frame.map(
+                    new_modin_frame = query_compiler._modin_frame.map_full_axis(
                         lambda df: func(df, other, *args, **kwargs),
                         axis=axis,
-                        full_axis=True,
                         new_index=query_compiler.index,
                         new_columns=query_compiler.columns,
                         dtypes=dtypes,

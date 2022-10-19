@@ -160,6 +160,7 @@ def _make_wrapped_method(name: str):
 
 for method in (
     "map_partitions",
+    "map_partitions_full_axis",
     "lazy_map_partitions",
     "map_select_indices",
     "map_select_indices_both_axes",

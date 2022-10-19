@@ -243,33 +243,7 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
             )
 
         if by is not None:
-
-            def apply_func(df, *others):
-                other = (
-                    pandas.concat(others, axis=axis ^ 1)
-                    if len(others) > 1
-                    else others[0]
-                )
-                return map_func(df, other=other)
-
-            apply_func = cls.preprocess_func(apply_func)
-            rt_axis_parts = cls.axis_partition(by, axis ^ 1)
-            mapped_partitions = np.array(
-                [
-                    [
-                        part.apply(
-                            apply_func,
-                            *(
-                                rt_axis_parts[col_idx].list_of_blocks
-                                if axis
-                                else rt_axis_parts[row_idx].list_of_blocks
-                            ),
-                        )
-                        for col_idx, part in enumerate(partitions[row_idx])
-                    ]
-                    for row_idx in range(len(partitions))
-                ]
-            )
+            mapped_partitions = cls.map_partitions(partitions, map_func, axis=axis, other_partitions=by, other_name="other")
         else:
             mapped_partitions = cls.map_partitions(partitions, map_func)
         return cls.map_partitions(
@@ -279,6 +253,61 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
     @classmethod
     @wait_computations_if_benchmark_mode
     def map_partitions(
+        cls,
+        partitions,
+        apply_func,
+        *,
+        axis: Optional[AxisInt] = None,
+        other_partitions: Optional = None,
+        other_name: str = "r",
+        **kwargs,
+    ):
+        """
+        other_name : str, default: "r"
+            Name of key-value argument for `apply_func` that
+            is used to pass `right` to `apply_func`.
+        """
+        if axis is None:
+            assert other_partitions is None, "cannot broadcast for a cell-wise map"
+            preprocessed_map_func = cls.preprocess_func(apply_func)
+            return np.array(
+                [
+                    [part.apply(preprocessed_map_func) for part in row_of_parts]
+                    for row_of_parts in partitions
+                ]
+            )
+
+        assert other_partitions is not None, "Non-full-axis map is not supported for single partitions"
+
+        def map_func(df, *others):
+            other = (
+                pandas.concat(others, axis=axis ^ 1) if len(others) > 1 else others[0]
+            )
+            return apply_func(df, **{other_name: other})
+
+        preprocessed_map_func = cls.preprocess_func(map_func)
+        left = partitions
+        rt_axis_parts = cls.axis_partition(other_partitions, axis ^ 1)
+        return np.array(
+            [
+                [
+                    part.apply(
+                        preprocessed_map_func,
+                        *(
+                            rt_axis_parts[col_idx].list_of_blocks
+                            if axis
+                            else rt_axis_parts[row_idx].list_of_blocks
+                        ),
+                    )
+                    for col_idx, part in enumerate(left[row_idx])
+                ]
+                for row_idx in range(len(left))
+            ]
+        )
+        
+    @classmethod
+    @wait_computations_if_benchmark_mode
+    def map_partitions_full_axis(
         cls,
         partitions,
         apply_func,
@@ -333,15 +362,6 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
         NumPy array
             An array of partitions
         """
-        if axis is None:
-            assert other_partitions is None, "cannot broadcast for a cell-wise map"
-            preprocessed_map_func = cls.preprocess_func(apply_func)
-            return np.array(
-                [
-                    [part.apply(preprocessed_map_func) for part in row_of_parts]
-                    for row_of_parts in partitions
-                ]
-            )
         # Since we are already splitting the DataFrame back up after an
         # operation, we will just use this time to compute the number of
         # partitions as best we can right now.
