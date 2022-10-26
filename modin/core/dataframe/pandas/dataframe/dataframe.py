@@ -1931,6 +1931,7 @@ class PandasDataframe(ClassLogger):
                 dtypes=dtypes,
             )
 
+    @lazy_metadata_decorator(apply_axis="both")
     def map_full_axis(
         self,
         func: Callable,
