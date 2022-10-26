@@ -18,19 +18,11 @@ ModinDataframe is a parent abstract class for any dataframe class.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Hashable, Optional, Callable, Union, Dict, TYPE_CHECKING
+from typing import List, Hashable, Optional, Callable, Union, Dict
 
 import pandas
 
 from modin.core.dataframe.base.dataframe.utils import Axis, JoinType
-
-if TYPE_CHECKING:
-    from modin.core.dataframe.pandas.partitioning import (
-        PandasDataframePartition,
-        PandasDataframeAxisPartition,
-    )
-
-    Partition = Union[PandasDataframeAxisPartition, PandasDataframePartition]
 
 
 class ModinDataframe(ABC):
@@ -273,7 +265,7 @@ class ModinDataframe(ABC):
     def reduce(
         self,
         axis: Union[int, Axis],
-        function: Callable[["Partition"], object],
+        function: Callable,
         *,
         dtypes: Optional[pandas.Series] = None,
     ) -> "ModinDataframe":
@@ -306,8 +298,8 @@ class ModinDataframe(ABC):
     def tree_reduce(
         self,
         axis: Union[int, Axis],
-        map_func: Callable[["Partition"], "Partition"],
-        reduce_func: Optional[Callable[["Partition"], object]] = None,
+        map_func: Callable,
+        reduce_func: Optional[Callable] = None,
         *,
         dtypes: Optional[pandas.Series] = None,
     ) -> "ModinDataframe":
