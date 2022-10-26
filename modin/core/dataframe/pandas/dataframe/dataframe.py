@@ -1015,7 +1015,7 @@ class PandasDataframe(ClassLogger):
             self._partitions,
             from_labels_executor,
             axis=0,
-            other=None,
+            other_partitions=None,
             full_axis=False,
             apply_indices=[0],
             other_apply_indices=None,

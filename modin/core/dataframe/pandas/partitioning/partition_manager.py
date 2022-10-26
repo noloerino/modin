@@ -246,7 +246,7 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
             mapped_partitions = cls.map_partitions(partitions, map_func, axis=axis, other_partitions=by, other_name="other")
         else:
             mapped_partitions = cls.map_partitions(partitions, map_func)
-        return cls.map_partitions(
+        return cls.map_partitions_full_axis(
             mapped_partitions, reduce_func, axis=axis, enumerate_partitions=True
         )
 
