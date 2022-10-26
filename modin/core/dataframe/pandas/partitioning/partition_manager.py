@@ -243,7 +243,9 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
             )
 
         if by is not None:
-            mapped_partitions = cls.map_partitions(partitions, map_func, axis=axis, other_partitions=by, other_name="other")
+            mapped_partitions = cls.map_partitions(
+                partitions, map_func, axis=axis, other_partitions=by, other_name="other"
+            )
         else:
             mapped_partitions = cls.map_partitions(partitions, map_func)
         return cls.map_partitions_full_axis(
@@ -263,9 +265,32 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
         **kwargs,
     ):
         """
+        Apply ``apply_func`` to every partition in ``partitions``.
+
+        If ``other_partitions`` is specified, then this broadcasts those partitions.
+
+        Parameters
+        ----------
+        partitions : NumPy 2D array
+            Partitions housing the data of Modin Frame.
+        apply_func : callable
+            Function to apply to ``partitions``.
+            If ``other_partitions`` is supplied, then this is a binary function that is
+            applied to ``partitions`` and ``other_partitions`` together.
+        axis : {0, 1}, optional
+            Axis to map over (cell-wise if None).
+        other_partitions : NumPy 2D array, optional
+            Partitions of another partition to be broadcasted.
         other_name : str, default: "r"
             Name of key-value argument for `apply_func` that
             is used to pass `right` to `apply_func`.
+        **kwargs : dict
+            Additional options to pass to ``apply_func``.
+
+        Returns
+        -------
+        NumPy array
+            An array of partitions.
         """
         if axis is None:
             assert other_partitions is None, "cannot broadcast for a cell-wise map"
@@ -277,7 +302,9 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
                 ]
             )
 
-        assert other_partitions is not None, "Non-full-axis map is not supported for single partitions"
+        assert (
+            other_partitions is not None
+        ), "Non-full-axis map is not supported for single partitions"
 
         def map_func(df, *others):
             other = (
@@ -304,7 +331,7 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
                 for row_idx in range(len(left))
             ]
         )
-        
+
     @classmethod
     @wait_computations_if_benchmark_mode
     def map_partitions_full_axis(
@@ -323,9 +350,13 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
         **kwargs,
     ):
         """
-        Apply ``apply_func`` to every partition in ``partitions``.
+        Apply ``apply_func`` to every partition in ``partitions``, converting them into full-axis partitions if necessary.
 
         If ``other_partitions`` is specified, then this broadcasts those partitions.
+
+        If ``partitions`` or ``other_partitions`` do not encompass the whole axis,
+        the partitions will be concatenated together before the function is called,
+        and then re-split after it returns.
 
         Parameters
         ----------
@@ -355,12 +386,12 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
         lengths : list of ints, default: None
             The list of lengths to shuffle the object.
         **kwargs : dict
-            Additional options to pass to ``map_func``.
+            Additional options to pass to ``apply_func``.
 
         Returns
         -------
         NumPy array
-            An array of partitions
+            An array of partitions.
         """
         # Since we are already splitting the DataFrame back up after an
         # operation, we will just use this time to compute the number of
@@ -502,12 +533,12 @@ class PandasDataframePartitionManager(ClassLogger, ABC):
 
         Parameters
         ----------
+        partitions : np.ndarray
+            The partitions to which the ``func`` will apply.
         func : callable
             The function to apply to these indices of partitions.
         axis : {0, 1}
             Axis to apply the ``func`` over.
-        partitions : np.ndarray
-            The partitions to which the ``func`` will apply.
         other_partitions : np.ndarray
             Partitions for another dataframe to broadcast.
         full_axis : bool

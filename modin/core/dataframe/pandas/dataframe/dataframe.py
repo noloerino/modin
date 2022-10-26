@@ -1712,11 +1712,6 @@ class PandasDataframe(ClassLogger):
         full_axis=False,
         join_type="left",
         labels="keep",
-        new_index=None,
-        new_columns=None,
-        apply_indices=None,
-        numeric_indices=None,
-        enumerate_partitions=False,
         dtypes: Optional[Union[pandas.Series, type]] = None,
         copy_dtypes: bool = False,
     ) -> "PandasDataframe":
@@ -1741,21 +1736,6 @@ class PandasDataframe(ClassLogger):
         labels : {"keep", "replace", "drop"}, default: "keep"
             Whether keep labels from `self` Modin DataFrame, replace them with labels
             from joined DataFrame or drop altogether to make them be computed lazily later.
-        new_index : list-like, optional
-            Index of the result. We may know this in advance, and if not provided it must be computed.
-            WARNING: This is currently only used when ``full_axis`` is True.
-        new_columns : list-like, optional
-            Columns of the result. We may know this in advance, and if not provided it must be computed.
-            WARNING: This is currently only used when ``full_axis`` is True.
-        apply_indices : list-like, optional
-            Labels of `axis ^ 1` to apply ``func`` over. Mutually exclusive from ``numeric_indices``.
-            WARNING: This is currently only used when ``full_axis`` is True.
-        numeric_indices : list-like, optional
-            Numeric indices to apply ``func`` over. Mutually exclusive from ``apply_indices``.
-        enumerate_partitions : bool, default: False
-            Whether pass partition index into applied `func` or not.
-            Note that `func` must be able to obtain `partition_idx` kwarg.
-            WARNING: This is currently only used when ``full_axis`` is True.
         dtypes : pandas.Series or scalar type, optional
             The data types for the result. This is an optimization
             because there are functions that always result in a particular data
@@ -1838,7 +1818,7 @@ class PandasDataframe(ClassLogger):
         copy_dtypes,
     ) -> "PandasDataframe":
         """
-        Broadcast axis partitions of `other` to partitions of `self` and apply a function.
+        Perform a row or column-wise map across the dataframe.
 
         Parameters
         ----------
@@ -1949,11 +1929,48 @@ class PandasDataframe(ClassLogger):
         copy_dtypes: bool = False,
     ):
         """
-        full_axis : bool, default: False
-            Whether to apply the function to a virtual partition that encompasses the whole axis.
-            If the virtual partitions of this dataframe and ``other`` do not encompass the whole axis,
-            the partitions will be concatenated together before the function is called, and then re-split
-            after it returns.
+        Perform a full-axis row or column-wise map across the dataframe.
+
+        If the virtual partitions of this dataframe and ``other`` do not encompass the whole axis,
+        the partitions will be concatenated together before the function is called, and then re-split
+        after it returns.
+
+        Parameters
+        ----------
+        func : callable
+            Function to apply.
+        axis : {0, 1}
+            Axis to broadcast over.
+        other : PandasDataframe, optional
+            Modin DataFrame to broadcast.
+        join_type : str, default: "left"
+            Type of join to apply.
+        labels : {"keep", "replace", "drop"}, default: "keep"
+            Whether keep labels from `self` Modin DataFrame, replace them with labels
+            from joined DataFrame or drop altogether to make them be computed lazily later.
+        new_index : list-like, optional
+            Index of the result. We may know this in advance, and if not provided it must be computed.
+        new_columns : list-like, optional
+            Columns of the result. We may know this in advance, and if not provided it must be computed.
+        apply_indices : list-like, optional
+            Labels of `axis ^ 1` to apply over (if `numeric_indices` is not specified).
+        numeric_indices : list-like, optional
+            Numeric indices to apply over (if `apply_indices` is not specified).
+        enumerate_partitions : bool, default: False
+            Whether pass partition index into applied `func` or not.
+            Note that `func` must be able to obtain `partition_idx` kwarg.
+        dtypes : pandas.Series, optional
+            Data types of the result. This is an optimization
+            because there are functions that always result in a particular data
+            type, and allows us to avoid (re)computing it.
+        copy_dtypes : bool, default: False
+            If True, the dtypes of the resulting dataframe are copied from the original,
+            and the ``dtypes`` argument is ignored.
+
+        Returns
+        -------
+        PandasDataframe
+            New Modin DataFrame.
         """
         if other is not None:
             if not isinstance(other, list):
