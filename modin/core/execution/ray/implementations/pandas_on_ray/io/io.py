@@ -112,8 +112,8 @@ class PandasOnRayIO(RayIO):
 
         # Ensure that the metadata is syncrhonized
         qc._modin_frame._propagate_index_objs(axis=None)
-        result = qc._modin_frame.map(
-            func, axis=1, full_axis=True, new_index=[], new_columns=[]
+        result = qc._modin_frame.map_full_axis(
+            func, axis=1, new_index=[], new_columns=[]
         )
         # FIXME: we should be waiting for completion less expensively, maybe use _modin_frame.materialize()?
         result.to_pandas()  # blocking operation
@@ -230,7 +230,7 @@ class PandasOnRayIO(RayIO):
         RayWrapper.materialize(signals.send.remote(0))
         # Ensure that the metadata is syncrhonized
         qc._modin_frame._propagate_index_objs(axis=None)
-        result = qc._modin_frame._partition_mgr_cls.map_partitions(
+        result = qc._modin_frame._partition_mgr_cls.map_partitions_full_axis(
             qc._modin_frame._partitions,
             func,
             axis=1,
@@ -309,7 +309,7 @@ class PandasOnRayIO(RayIO):
 
         # Ensure that the metadata is synchronized
         qc._modin_frame._propagate_index_objs(axis=None)
-        result = qc._modin_frame._partition_mgr_cls.map_partitions(
+        result = qc._modin_frame._partition_mgr_cls.map_partitions_full_axis(
             qc._modin_frame._partitions,
             func,
             axis=1,

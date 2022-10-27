@@ -292,7 +292,7 @@ class PandasProtocolColumn(ProtocolColumn):
         new_lengths = [chunksize] * n_chunks
         new_lengths[-1] = n_rows % n_chunks + new_lengths[-1]
 
-        new_partitions = self._col._partition_mgr_cls.map_partitions(
+        new_partitions = self._col._partition_mgr_cls.map_partitions_full_axis(
             self._col._partitions,
             lambda df: df,
             axis=0,
