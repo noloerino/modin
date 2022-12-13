@@ -2452,7 +2452,8 @@ class PandasQueryCompiler(BaseQueryCompiler):
         # map.
         return self.__constructor__(
             self._modin_frame.apply_full_axis(
-                lambda df: df.squeeze(axis=1).apply(func, *args, **kwargs, axis=1)
+                lambda df: df.squeeze(axis=1).apply(func, *args, **kwargs),
+                axis=1,
             )
         )
 
