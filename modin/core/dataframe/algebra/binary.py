@@ -85,9 +85,9 @@ class Binary(Operator):
                         other = other.transpose()
                     return query_compiler.__constructor__(
                         query_compiler._modin_frame.broadcast_apply(
-                            axis,
                             lambda l, r: func(l, r.squeeze(), *args, **kwargs),
-                            other._modin_frame,
+                            axis=axis,
+                            other=other._modin_frame,
                             join_type=join_type,
                             labels=labels,
                             dtypes=dtypes,
@@ -106,8 +106,8 @@ class Binary(Operator):
                 # accordingly, in that way we will be able to use more efficient `._modin_frame.map()`
                 if isinstance(other, (dict, list, np.ndarray, pandas.Series)):
                     new_modin_frame = query_compiler._modin_frame.apply_full_axis(
-                        axis,
                         lambda df: func(df, other, *args, **kwargs),
+                        axis=axis,
                         new_index=query_compiler.index,
                         new_columns=query_compiler.columns,
                         dtypes=dtypes,
