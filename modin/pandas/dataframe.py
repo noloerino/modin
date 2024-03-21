@@ -1243,13 +1243,6 @@ class DataFrame(BasePandasDataset):
         new_frame.columns = new_columns
         return new_frame
 
-    def isetitem(self, loc, value):
-        return self._default_to_pandas(
-            pandas.DataFrame.isetitem,
-            loc=loc,
-            value=value,
-        )
-
     def le(self, other, axis="columns", level=None):  # noqa: PR01, RT01, D200
         """
         Get less than or equal comparison of ``DataFrame`` and `other`, element-wise (binary operator `le`).
