@@ -222,9 +222,7 @@ class Resampler(ClassLogger):
 
     def nearest(self, limit=None):
         return self._dataframe.__constructor__(
-            data=self._query_compiler.resample_nearest(
-                self.resample_kwargs, limit
-            )
+            data=self._query_compiler.resample_nearest(self.resample_kwargs, limit)
         )
 
     def fillna(self, method, limit=None):
@@ -236,9 +234,7 @@ class Resampler(ClassLogger):
 
     def asfreq(self, fill_value=None):
         return self._dataframe.__constructor__(
-            data=self._query_compiler.resample_asfreq(
-                self.resample_kwargs, fill_value
-            )
+            data=self._query_compiler.resample_asfreq(self.resample_kwargs, fill_value)
         )
 
     def interpolate(

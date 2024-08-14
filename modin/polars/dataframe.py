@@ -47,7 +47,7 @@ class DataFrame(BasePolarsDataset):
         orient=None,
         infer_schema_length=100,
         nan_to_null=False,
-        _data=None,
+        _query_compiler=None,
     ) -> None:
         """
         Constructor for DataFrame object.
@@ -94,9 +94,7 @@ class DataFrame(BasePolarsDataset):
             missing = [i for i in item if i not in self.columns]
             if len(missing) > 0:
                 raise polars.exceptions.ColumnNotFoundError(missing[0])
-            return self.__constructor__(
-                _data=self._query_compiler.getitem_array(item)
-            )
+            return self.__constructor__(_data=self._query_compiler.getitem_array(item))
         else:
             if item not in self.columns:
                 raise polars.exceptions.ColumnNotFoundError(item)
@@ -233,9 +231,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the maximum values.
         """
         if axis is None or axis == 0:
-            return self.__constructor__(
-                _data=self._query_compiler.max(axis=0)
-            )
+            return self.__constructor__(_data=self._query_compiler.max(axis=0))
         else:
             return self.max_horizontal()
 
@@ -304,9 +300,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the median of each column.
         """
         return self.__constructor__(
-            _data=self._convert_non_numeric_to_null()._query_compiler.median(
-                0
-            )
+            _data=self._convert_non_numeric_to_null()._query_compiler.median(0)
         )
 
     def mean_horizontal(self, *, ignore_nulls: bool = True):
@@ -335,9 +329,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the minimum values of each row or column.
         """
         if axis is None or axis == 0:
-            return self.__constructor__(
-                _data=self._query_compiler.min(axis=0)
-            )
+            return self.__constructor__(_data=self._query_compiler.min(axis=0))
         else:
             return self.max_horizontal()
 
@@ -537,9 +529,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the number of null values in each column.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.isna().sum(axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.isna().sum(axis=0))
 
     def to_pandas(self):
         """
@@ -1005,9 +995,7 @@ class DataFrame(BasePolarsDataset):
             Reversed DataFrame.
         """
         return self.__constructor__(
-            _data=self._query_compiler.getitem_row_array(
-                slice(None, None, -1)
-            )
+            _data=self._query_compiler.getitem_row_array(slice(None, None, -1))
         )
 
     def rolling(self, index_column, *, period, offset, closed, group_by, check_sorted):
@@ -1209,9 +1197,7 @@ class DataFrame(BasePolarsDataset):
             return self
         else:
             return self.__constructor__(
-                _data=self._query_compiler.concat(
-                    axis=0, other=other._query_compiler
-                )
+                _data=self._query_compiler.concat(axis=0, other=other._query_compiler)
             )
 
     def with_columns(self, *exprs, **named_exprs) -> "DataFrame":
@@ -1258,9 +1244,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the function applied.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.apply(function, axis=1)
-        )
+        return self.__constructor__(_data=self._query_compiler.apply(function, axis=1))
 
     def corr(self, **kwargs: Any) -> "DataFrame":
         """

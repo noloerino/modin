@@ -152,9 +152,11 @@ class DataFrame(BasePandasDataset):
         self._siblings = []
         query_compiler = None
         if isinstance(data, BaseQueryCompiler):
-            _query_compiler = data
+            self._query_compiler = data
         elif hasattr(data, "_query_compiler"):
-            _query_compiler = DataFrame._get_query_compiler_from_modin_object(data, index, columns)
+            self._query_compiler = self._get_query_compiler_from_modin_object(
+                data, index, columns
+            )
         elif isinstance(data, array):
             self._query_compiler = data._query_compiler.copy()
             if copy is not None and not copy:
@@ -232,8 +234,9 @@ class DataFrame(BasePandasDataset):
         else:
             self._query_compiler = query_compiler
 
-    @classmethod
-    def _get_query_compiler_from_modin_object(cls, data, index=None, columns=None) -> BaseQueryCompiler:
+    def _get_query_compiler_from_modin_object(
+        self, data, index=None, columns=None
+    ) -> BaseQueryCompiler:
         """
         Process a query compiler from `data`, which has a `_query_compiler` attribute.
 
@@ -404,18 +407,14 @@ class DataFrame(BasePandasDataset):
         Prefix labels with string `prefix`.
         """
         axis = 1 if axis is None else self._get_axis_number(axis)
-        return self.__constructor__(
-            data=self._query_compiler.add_prefix(prefix, axis)
-        )
+        return self.__constructor__(data=self._query_compiler.add_prefix(prefix, axis))
 
     def add_suffix(self, suffix, axis=None) -> DataFrame:  # noqa: PR01, RT01, D200
         """
         Suffix labels with string `suffix`.
         """
         axis = 1 if axis is None else self._get_axis_number(axis)
-        return self.__constructor__(
-            data=self._query_compiler.add_suffix(suffix, axis)
-        )
+        return self.__constructor__(data=self._query_compiler.add_suffix(suffix, axis))
 
     def map(self, func, na_action: Optional[str] = None, **kwargs) -> DataFrame:
         if not callable(func):
@@ -638,9 +637,7 @@ class DataFrame(BasePandasDataset):
         """
         # FIXME: Judging by pandas docs `*args` serves only compatibility purpose
         # and does not affect the result, we shouldn't pass it to the query compiler.
-        return self.__constructor__(
-            data=self._query_compiler.transpose(*args)
-        )
+        return self.__constructor__(data=self._query_compiler.transpose(*args))
 
     T: DataFrame = property(transpose)
 
@@ -788,9 +785,7 @@ class DataFrame(BasePandasDataset):
             return cov_df.__constructor__(result)
 
         return cov_df.__constructor__(
-            data=cov_df._query_compiler.cov(
-                min_periods=min_periods, ddof=ddof
-            )
+            data=cov_df._query_compiler.cov(min_periods=min_periods, ddof=ddof)
         )
 
     def dot(self, other) -> Union[DataFrame, Series]:  # noqa: PR01, RT01, D200
@@ -1474,9 +1469,7 @@ class DataFrame(BasePandasDataset):
         Return the first `n` rows ordered by `columns` in ascending order.
         """
         return self.__constructor__(
-            data=self._query_compiler.nsmallest(
-                n=n, columns=columns, keep=keep
-            )
+            data=self._query_compiler.nsmallest(n=n, columns=columns, keep=keep)
         )
 
     def unstack(
@@ -1525,9 +1518,7 @@ class DataFrame(BasePandasDataset):
                 values = [v for v in values if v not in columns]
 
         return self.__constructor__(
-            data=self._query_compiler.pivot(
-                index=index, columns=columns, values=values
-            )
+            data=self._query_compiler.pivot(index=index, columns=columns, values=values)
         )
 
     def pivot_table(
@@ -2134,9 +2125,7 @@ class DataFrame(BasePandasDataset):
                 data=self._query_compiler.stack(level, dropna)
             )
         else:
-            return self.__constructor__(
-                data=self._query_compiler.stack(level, dropna)
-            )
+            return self.__constructor__(data=self._query_compiler.stack(level, dropna))
 
     def sub(
         self, other, axis="columns", level=None, fill_value=None
@@ -3222,9 +3211,7 @@ class DataFrame(BasePandasDataset):
         -------
         Series of datetime64 dtype
         """
-        return self._reduce_dimension(
-            data=self._query_compiler.to_datetime(**kwargs)
-        )
+        return self._reduce_dimension(data=self._query_compiler.to_datetime(**kwargs))
 
     def _getitem(self, key) -> Union[DataFrame, Series]:
         """
@@ -3253,9 +3240,7 @@ class DataFrame(BasePandasDataset):
                 data=self._query_compiler.getitem_array(key._query_compiler)
             )
         elif isinstance(key, (np.ndarray, pandas.Index, list)):
-            return self.__constructor__(
-                data=self._query_compiler.getitem_array(key)
-            )
+            return self.__constructor__(data=self._query_compiler.getitem_array(key))
         elif isinstance(key, DataFrame):
             return self.where(key)
         elif is_mi_columns:

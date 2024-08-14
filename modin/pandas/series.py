@@ -43,6 +43,7 @@ from modin.utils import (
 
 from .accessor import CachedAccessor, SparseAccessor
 from .base import _ATTRS_NO_LOOKUP, BasePandasDataset
+from .dataframe import DataFrame
 from .iterator import PartitionIterator
 from .series_utils import (
     CategoryMethods,
@@ -55,9 +56,6 @@ from .utils import _doc_binary_op, cast_function_modin2pandas, is_scalar
 
 if TYPE_CHECKING:
     import numpy.typing as npt
-
-
-    from .dataframe import DataFrame
 
 # Dictionary of extensions assigned to this class
 _SERIES_EXTENSIONS_ = {}
@@ -117,7 +115,7 @@ class Series(BasePandasDataset):
         if isinstance(data, BaseQueryCompiler):
             query_compiler = data
         if hasattr(data, "_query_compiler"):
-            query_compiler = Series._get_query_compiler_from_modin_object(data, index)
+            query_compiler = self._get_query_compiler_from_modin_object(data, index)
         if isinstance(data, array):
             if data._ndim == 2:
                 raise ValueError("Data must be 1-dimensional")
@@ -159,14 +157,16 @@ class Series(BasePandasDataset):
             self.name = name
 
     @classmethod
-    def _get_query_compiler_from_modin_object(cls, data, index=None) -> BaseQueryCompiler:
+    def _get_query_compiler_from_modin_object(
+        self, data, index=None
+    ) -> BaseQueryCompiler:
         """
         Process a query compiler from `data`, which has a `_query_compiler` attribute.
 
         This method is called during initialization to construct a Series from another
         Modin object.
         """
-        if isinstance(data, cls):
+        if isinstance(data, type(self)):
             query_compiler = data._query_compiler.copy()
             if index is not None:
                 if any(i not in data.index for i in index):
@@ -176,7 +176,7 @@ class Series(BasePandasDataset):
                     )
                 query_compiler = data.loc[index]._query_compiler
             return query_compiler
-        elif isinstance(data, pd.DataFrame):
+        elif isinstance(data, DataFrame):
             # data is a DataFrame
             raise ValueError(
                 f"Data must be 1-dimensional, got ndarray of shape {data.shape} instead"
@@ -979,9 +979,7 @@ class Series(BasePandasDataset):
         division, modulo = self._query_compiler.divmod(
             other=other, level=level, fill_value=fill_value, axis=axis
         )
-        return self.__constructor__(data=division), self.__constructor__(
-            data=modulo
-        )
+        return self.__constructor__(data=division), self.__constructor__(data=modulo)
 
     def dot(self, other) -> Union[Series, np.ndarray]:  # noqa: PR01, RT01, D200
         """
@@ -1475,9 +1473,7 @@ class Series(BasePandasDataset):
             # pandas returns empty series when requested largest/smallest from empty series
             return self.__constructor__(data=[], dtype=float)
         return Series(
-            data=self._query_compiler.nlargest(
-                n=n, columns=self.name, keep=keep
-            )
+            data=self._query_compiler.nlargest(n=n, columns=self.name, keep=keep)
         )
 
     def nsmallest(self, n=5, keep="first") -> Series:  # noqa: PR01, RT01, D200
@@ -1488,9 +1484,7 @@ class Series(BasePandasDataset):
             # pandas returns empty series when requested largest/smallest from empty series
             return self.__constructor__(data=[], dtype=float)
         return self.__constructor__(
-            data=self._query_compiler.nsmallest(
-                n=n, columns=self.name, keep=keep
-            )
+            data=self._query_compiler.nsmallest(n=n, columns=self.name, keep=keep)
         )
 
     def shift(
@@ -1534,9 +1528,7 @@ class Series(BasePandasDataset):
 
         # We can't unstack a Series object, if we don't have a MultiIndex.
         if len(self.index.names) > 1:
-            result = DataFrame(
-                data=self._query_compiler.unstack(level, fill_value)
-            )
+            result = DataFrame(data=self._query_compiler.unstack(level, fill_value))
         else:
             raise ValueError(
                 f"index must be a MultiIndex to unstack, {type(self.index)} was passed"
@@ -1774,9 +1766,7 @@ class Series(BasePandasDataset):
         division, modulo = self._query_compiler.rdivmod(
             other=other, level=level, fill_value=fill_value, axis=axis
         )
-        return self.__constructor__(data=division), self.__constructor__(
-            data=modulo
-        )
+        return self.__constructor__(data=division), self.__constructor__(data=modulo)
 
     def rfloordiv(
         self, other, level=None, fill_value=None, axis=0
@@ -1901,9 +1891,7 @@ class Series(BasePandasDataset):
             searchsorted_qc = searchsorted_qc.reset_index(drop=True)
 
         result = self.__constructor__(
-            data=searchsorted_qc.searchsorted(
-                value=value, side=side, sorter=sorter
-            )
+            data=searchsorted_qc.searchsorted(value=value, side=side, sorter=sorter)
         ).squeeze()
 
         # matching Pandas output
@@ -2210,9 +2198,7 @@ class Series(BasePandasDataset):
         """
         Create a new view of the Series.
         """
-        return self.__constructor__(
-            data=self._query_compiler.series_view(dtype=dtype)
-        )
+        return self.__constructor__(data=self._query_compiler.series_view(dtype=dtype))
 
     def where(
         self,
@@ -2389,9 +2375,7 @@ class Series(BasePandasDataset):
         datetime
             Series of datetime64 dtype.
         """
-        return self.__constructor__(
-            data=self._query_compiler.to_datetime(**kwargs)
-        )
+        return self.__constructor__(data=self._query_compiler.to_datetime(**kwargs))
 
     def _to_numeric(self, **kwargs) -> Series:
         """
@@ -2408,9 +2392,7 @@ class Series(BasePandasDataset):
         numeric
             Series of numeric dtype.
         """
-        return self.__constructor__(
-            data=self._query_compiler.to_numeric(**kwargs)
-        )
+        return self.__constructor__(data=self._query_compiler.to_numeric(**kwargs))
 
     def _qcut(self, q, **kwargs):  # noqa: PR01, RT01, D200
         """

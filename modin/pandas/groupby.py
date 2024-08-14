@@ -1482,11 +1482,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
             return (
                 (
                     (k,) if self._return_tuple_when_iterating else k,
-                    DataFrame(
-                        data=self._query_compiler.getitem_row_array(
-                            indices[k]
-                        )
-                    ),
+                    DataFrame(data=self._query_compiler.getitem_row_array(indices[k])),
                 )
                 for k in (sorted(group_ids) if self._sort else group_ids)
             )
@@ -1763,11 +1759,7 @@ class SeriesGroupBy(DataFrameGroupBy):  # noqa: GL08
             return (
                 (
                     k,
-                    Series(
-                        data=self._query_compiler.getitem_row_array(
-                            indices[k]
-                        )
-                    ),
+                    Series(data=self._query_compiler.getitem_row_array(indices[k])),
                 )
                 for k in (sorted(group_ids) if self._sort else group_ids)
             )

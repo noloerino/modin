@@ -442,9 +442,7 @@ def read_clipboard(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(
-        data=FactoryDispatcher.read_clipboard(**kwargs)
-    )
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_clipboard(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_excel, apilink="pandas.read_excel")
@@ -537,9 +535,7 @@ def read_feather(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(
-        data=FactoryDispatcher.read_feather(**kwargs)
-    )
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_feather(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_stata)
@@ -610,9 +606,7 @@ def read_pickle(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(
-        data=FactoryDispatcher.read_pickle(**kwargs)
-    )
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_pickle(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_sql, apilink="pandas.read_sql")
@@ -702,9 +696,7 @@ def read_sql_table(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(
-        data=FactoryDispatcher.read_sql_table(**kwargs)
-    )
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_sql_table(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_sql_query, apilink="pandas.read_sql_query")
@@ -724,9 +716,7 @@ def read_sql_query(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(
-        data=FactoryDispatcher.read_sql_query(**kwargs)
-    )
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_sql_query(**kwargs))
 
 
 @_inherit_docstrings(pandas.to_pickle)

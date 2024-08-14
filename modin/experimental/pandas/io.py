@@ -291,9 +291,7 @@ def _read(**kwargs) -> DataFrame:
     # This happens when `read_csv` returns a TextFileReader object for iterating through
     if isinstance(pd_obj, pandas.io.parsers.TextFileReader):
         reader = pd_obj.read
-        pd_obj.read = lambda *args, **kwargs: DataFrame(
-            data=reader(*args, **kwargs)
-        )
+        pd_obj.read = lambda *args, **kwargs: DataFrame(data=reader(*args, **kwargs))
         return pd_obj
 
     return DataFrame(data=pd_obj)

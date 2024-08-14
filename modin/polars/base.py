@@ -169,9 +169,7 @@ class BasePolarsDataset:
         Returns:
             DataFrame with True for each duplicate row, and False for unique rows.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.duplicated(keep=False)
-        )
+        return self.__constructor__(_data=self._query_compiler.duplicated(keep=False))
 
     def is_empty(self) -> bool:
         """
@@ -316,9 +314,7 @@ class BasePolarsDataset:
         """
         if len(more_columns) > 0:
             columns = [columns, *more_columns]
-        return self.__constructor__(
-            _data=self._query_compiler.explode(columns)
-        )
+        return self.__constructor__(_data=self._query_compiler.explode(columns))
 
     def extend(self, other: "BasePolarsDataset") -> "BasePolarsDataset":
         """
@@ -384,9 +380,7 @@ class BasePolarsDataset:
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
         return self.__constructor__(
-            _data=self._query_compiler.fillna(
-                value=value, method=strategy, limit=limit
-            )
+            _data=self._query_compiler.fillna(value=value, method=strategy, limit=limit)
         )
 
     def filter(self, *predicates, **constraints: Any) -> "BasePolarsDataset":
@@ -396,9 +390,7 @@ class BasePolarsDataset:
         if constraints:
             raise NotImplementedError("Named constraints are not supported")
         return self.__constructor__(
-            _data=self._query_compiler.getitem_array(
-                predicates._query_compiler
-            )
+            _data=self._query_compiler.getitem_array(predicates._query_compiler)
         )
 
     def gather_every(self, n: int, offset: int = 0) -> "BasePolarsDataset":
@@ -413,9 +405,7 @@ class BasePolarsDataset:
             DataFrame with every nth row gathered.
         """
         return self.__constructor__(
-            _data=self._query_compiler.getitem_row_array(
-                slice(offset, None, n)
-            )
+            _data=self._query_compiler.getitem_row_array(slice(offset, None, n))
         )
 
     def head(self, n: int = 5) -> "BasePolarsDataset":
@@ -505,9 +495,7 @@ class BasePolarsDataset:
             Sliced DataFrame.
         """
         return self.__constructor__(
-            _data=self._query_compiler.getitem_row_array(
-                slice(offset, offset + length)
-            )
+            _data=self._query_compiler.getitem_row_array(slice(offset, offset + length))
         )
 
     def sort(
@@ -581,9 +569,7 @@ class BasePolarsDataset:
                 columns = [columns]
         else:
             columns = self.columns
-        result = self.__constructor__(
-            _data=self._query_compiler.get_dummies(columns)
-        )
+        result = self.__constructor__(_data=self._query_compiler.get_dummies(columns))
         if separator != "_":
             result.columns = [
                 c.replace(separator, "_") if separator in c else c
@@ -628,9 +614,7 @@ class BasePolarsDataset:
         if keep == "none" or keep == "last":
             # TODO: support keep="none"
             raise NotImplementedError("not yet")
-        return self.__constructor__(
-            _data=self._query_compiler.unique(subset=subset)
-        )
+        return self.__constructor__(_data=self._query_compiler.unique(subset=subset))
 
     def equals(self, other: "BasePolarsDataset", *, null_equal: bool = True) -> bool:
         """

@@ -853,9 +853,7 @@ class BasePandasDataset(ClassLogger):
             fill_axis=fill_axis,
             broadcast_axis=broadcast_axis,
         )
-        return self.__constructor__(data=left), self.__constructor__(
-            data=right
-        )
+        return self.__constructor__(data=left), self.__constructor__(data=right)
 
     @abc.abstractmethod
     def _reduce_dimension(self, query_compiler: BaseQueryCompiler) -> Series | Scalar:
@@ -1606,9 +1604,7 @@ class BasePandasDataset(ClassLogger):
         """
         Transform each element of a list-like to a row.
         """
-        exploded = self.__constructor__(
-            data=self._query_compiler.explode(column)
-        )
+        exploded = self.__constructor__(data=self._query_compiler.explode(column))
         if ignore_index:
             exploded = exploded.reset_index(drop=True)
         return exploded
@@ -2003,9 +1999,7 @@ class BasePandasDataset(ClassLogger):
         ignore_indices = isinstance(values, Series)
         values = getattr(values, "_query_compiler", values)
         return self.__constructor__(
-            data=self._query_compiler.isin(
-                values=values, ignore_indices=ignore_indices
-            )
+            data=self._query_compiler.isin(values=values, ignore_indices=ignore_indices)
         )
 
     def isna(self) -> Self:  # noqa: RT01, D200
@@ -4293,9 +4287,7 @@ class BasePandasDataset(ClassLogger):
             raise ValueError(
                 f"Passed `axis` parameter: {axis}, but should be one of {allowed_axis_values}"
             )
-        return self.__constructor__(
-            data=self._query_compiler.repartition(axis=axis)
-        )
+        return self.__constructor__(data=self._query_compiler.repartition(axis=axis))
 
     @disable_logging
     def __getattribute__(self, item) -> Any:

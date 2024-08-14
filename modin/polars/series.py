@@ -429,9 +429,7 @@ class Series(BasePolarsDataset):
         Returns:
             Cumulative count values Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.isna().cumsum()
-        )
+        return self.__constructor__(_data=self._query_compiler.isna().cumsum())
 
     def cum_max(self) -> "Series":
         """
@@ -1849,9 +1847,7 @@ class Series(BasePolarsDataset):
         Returns:
             Added Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.radd(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.radd(other, axis=0))
 
     def __rand__(self, other) -> "Series":
         """
@@ -1863,9 +1859,7 @@ class Series(BasePolarsDataset):
         Returns:
             And Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.__rand__(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.__rand__(other, axis=0))
 
     def __rfloordiv__(self, other) -> "Series":
         """
@@ -1877,9 +1871,7 @@ class Series(BasePolarsDataset):
         Returns:
             Floored Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rfloordiv(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rfloordiv(other, axis=0))
 
     def __rmatmul__(self, other) -> "Series":
         """
@@ -1903,9 +1895,7 @@ class Series(BasePolarsDataset):
         Returns:
             Modulo Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rmod(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rmod(other, axis=0))
 
     def __rmul__(self, other) -> "Series":
         """
@@ -1917,9 +1907,7 @@ class Series(BasePolarsDataset):
         Returns:
             Multiplied Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rmul(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rmul(other, axis=0))
 
     def __ror__(self, other) -> "Series":
         """
@@ -1931,9 +1919,7 @@ class Series(BasePolarsDataset):
         Returns:
             Or Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.__ror__(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.__ror__(other, axis=0))
 
     def __rpow__(self, other) -> "Series":
         """
@@ -1945,9 +1931,7 @@ class Series(BasePolarsDataset):
         Returns:
             Powered Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rpow(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rpow(other, axis=0))
 
     def __rsub__(self, other) -> "Series":
         """
@@ -1959,9 +1943,7 @@ class Series(BasePolarsDataset):
         Returns:
             Subtracted Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rsub(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rsub(other, axis=0))
 
     def __rtruediv__(self, other) -> "Series":
         """
@@ -1973,9 +1955,7 @@ class Series(BasePolarsDataset):
         Returns:
             Divided Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.rtruediv(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.rtruediv(other, axis=0))
 
     def __rxor__(self, other) -> "Series":
         """
@@ -1987,9 +1967,7 @@ class Series(BasePolarsDataset):
         Returns:
             Xor Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.__rxor__(other, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.__rxor__(other, axis=0))
 
     def eq(self, other) -> "Series":
         """
@@ -2118,9 +2096,7 @@ class Series(BasePolarsDataset):
         Returns:
             Powered Series.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.pow(exponent, axis=0)
-        )
+        return self.__constructor__(_data=self._query_compiler.pow(exponent, axis=0))
 
     def replace_strict(
         self, old, new=no_default, *, default=no_default, return_dtype=None
@@ -2154,6 +2130,4 @@ class Series(BasePolarsDataset):
         Returns:
             Series without NaN values.
         """
-        return self.__constructor__(
-            _data=self._query_compiler.dropna(how="any")
-        )
+        return self.__constructor__(_data=self._query_compiler.dropna(how="any"))

@@ -2748,9 +2748,7 @@ def test_fold_operator():
     df_equals(filtered_df, expected_df)
 
     def filter_modin_dataframe2(df):
-        return df.__constructor__(
-            data=df._query_compiler.filter_func(fold_axis=0)
-        )
+        return df.__constructor__(data=df._query_compiler.filter_func(fold_axis=0))
 
     pd.DataFrame.filter_dataframe2 = filter_modin_dataframe2
 
