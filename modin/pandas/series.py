@@ -604,7 +604,7 @@ class Series(BasePandasDataset):
         """
         axis = 0 if axis is None else self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.add_prefix(prefix, axis=axis)
+            data=self._query_compiler.add_prefix(prefix, axis=axis)
         )
 
     def add_suffix(
@@ -615,7 +615,7 @@ class Series(BasePandasDataset):
         """
         axis = 0 if axis is None else self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.add_suffix(suffix, axis=axis)
+            data=self._query_compiler.add_suffix(suffix, axis=axis)
         )
 
     def aggregate(
@@ -730,9 +730,9 @@ class Series(BasePandasDataset):
         if return_type == "DataFrame":
             from .dataframe import DataFrame
 
-            result = DataFrame(query_compiler=result)
+            result = DataFrame(data=result)
         elif return_type == "Series":
-            result = self.__constructor__(query_compiler=result)
+            result = self.__constructor__(data=result)
             if result.name == self.index[0]:
                 result.name = None
         elif isinstance(result, type(self._query_compiler)):
@@ -792,7 +792,7 @@ class Series(BasePandasDataset):
         Return the integer indices that would sort the Series values.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.argsort(
+            data=self._query_compiler.argsort(
                 # 'stable' parameter has no effect in Pandas and is only accepted
                 # for compatibility with NumPy, so we're not passing it forward on purpose
                 axis=axis,
@@ -884,7 +884,7 @@ class Series(BasePandasDataset):
             this -= this.mean()
             other -= other.mean()
 
-            other = other.__constructor__(query_compiler=other._query_compiler.conj())
+            other = other.__constructor__(data=other._query_compiler.conj())
             result = this * other / (len(this) - 1)
             result = np.array([result.sum()])
 
@@ -943,7 +943,7 @@ class Series(BasePandasDataset):
         this -= this.mean()
         other -= other.mean()
 
-        other = other.__constructor__(query_compiler=other._query_compiler.conj())
+        other = other.__constructor__(data=other._query_compiler.conj())
         result = this * other / (len(this) - ddof)
         result = result.sum()
         return result
@@ -979,8 +979,8 @@ class Series(BasePandasDataset):
         division, modulo = self._query_compiler.divmod(
             other=other, level=level, fill_value=fill_value, axis=axis
         )
-        return self.__constructor__(query_compiler=division), self.__constructor__(
-            query_compiler=modulo
+        return self.__constructor__(data=division), self.__constructor__(
+            data=modulo
         )
 
     def dot(self, other) -> Union[Series, np.ndarray]:  # noqa: PR01, RT01, D200
@@ -995,13 +995,13 @@ class Series(BasePandasDataset):
             qc = other.reindex(index=common)._query_compiler
             if isinstance(other, Series):
                 return self._reduce_dimension(
-                    query_compiler=self._query_compiler.dot(
+                    data=self._query_compiler.dot(
                         qc, squeeze_self=True, squeeze_other=True
                     )
                 )
             else:
                 return self.__constructor__(
-                    query_compiler=self._query_compiler.dot(
+                    data=self._query_compiler.dot(
                         qc, squeeze_self=True, squeeze_other=False
                     )
                 )
@@ -1018,7 +1018,7 @@ class Series(BasePandasDataset):
             )
 
         return self._reduce_dimension(
-            query_compiler=self._query_compiler.dot(other, squeeze_self=True)
+            data=self._query_compiler.dot(other, squeeze_self=True)
         )
 
     def drop_duplicates(
@@ -1074,7 +1074,7 @@ class Series(BasePandasDataset):
             other.name = "temp_name_for_equals_op"
             # this function should return only scalar
             res = self.__constructor__(
-                query_compiler=self._query_compiler.equals(other._query_compiler)
+                data=self._query_compiler.equals(other._query_compiler)
             )
         finally:
             self.name = old_name_self
@@ -1113,7 +1113,7 @@ class Series(BasePandasDataset):
             for case_tuple in caselist
         ]
         return self.__constructor__(
-            query_compiler=self._query_compiler.case_when(caselist=caselist)
+            data=self._query_compiler.case_when(caselist=caselist)
         )
 
     def fillna(
@@ -1359,7 +1359,7 @@ class Series(BasePandasDataset):
                 return mapper.get(s, np.nan)
 
         return self.__constructor__(
-            query_compiler=self._query_compiler.map(
+            data=self._query_compiler.map(
                 lambda s: (
                     arg(s) if pandas.isnull(s) is not True or na_action is None else s
                 )
@@ -1475,7 +1475,7 @@ class Series(BasePandasDataset):
             # pandas returns empty series when requested largest/smallest from empty series
             return self.__constructor__(data=[], dtype=float)
         return Series(
-            query_compiler=self._query_compiler.nlargest(
+            data=self._query_compiler.nlargest(
                 n=n, columns=self.name, keep=keep
             )
         )
@@ -1488,7 +1488,7 @@ class Series(BasePandasDataset):
             # pandas returns empty series when requested largest/smallest from empty series
             return self.__constructor__(data=[], dtype=float)
         return self.__constructor__(
-            query_compiler=self._query_compiler.nsmallest(
+            data=self._query_compiler.nsmallest(
                 n=n, columns=self.name, keep=keep
             )
         )
@@ -1535,7 +1535,7 @@ class Series(BasePandasDataset):
         # We can't unstack a Series object, if we don't have a MultiIndex.
         if len(self.index.names) > 1:
             result = DataFrame(
-                query_compiler=self._query_compiler.unstack(level, fill_value)
+                data=self._query_compiler.unstack(level, fill_value)
             )
         else:
             raise ValueError(
@@ -1717,7 +1717,7 @@ class Series(BasePandasDataset):
         ):
             return self.__constructor__()
 
-        return self.__constructor__(query_compiler=self._query_compiler.repeat(repeats))
+        return self.__constructor__(data=self._query_compiler.repeat(repeats))
 
     def reset_index(
         self,
@@ -1755,7 +1755,7 @@ class Series(BasePandasDataset):
 
             # Here `query_compiler` is passed instead of `obj` to avoid unnecessary `copy()`
             # inside `DataFrame` constructor
-            return DataFrame(query_compiler=obj._query_compiler).reset_index(
+            return DataFrame(data=obj._query_compiler).reset_index(
                 level=level,
                 drop=drop,
                 inplace=inplace,
@@ -1774,8 +1774,8 @@ class Series(BasePandasDataset):
         division, modulo = self._query_compiler.rdivmod(
             other=other, level=level, fill_value=fill_value, axis=axis
         )
-        return self.__constructor__(query_compiler=division), self.__constructor__(
-            query_compiler=modulo
+        return self.__constructor__(data=division), self.__constructor__(
+            data=modulo
         )
 
     def rfloordiv(
@@ -1901,7 +1901,7 @@ class Series(BasePandasDataset):
             searchsorted_qc = searchsorted_qc.reset_index(drop=True)
 
         result = self.__constructor__(
-            query_compiler=searchsorted_qc.searchsorted(
+            data=searchsorted_qc.searchsorted(
                 value=value, side=side, sorter=sorter
             )
         ).squeeze()
@@ -2165,7 +2165,7 @@ class Series(BasePandasDataset):
         # `values` can't be used here because it performs unnecessary conversion,
         # after which the result type does not match the pandas
         return (
-            self.__constructor__(query_compiler=self._query_compiler.unique())
+            self.__constructor__(data=self._query_compiler.unique())
             .modin.to_pandas()
             ._values
         )
@@ -2211,7 +2211,7 @@ class Series(BasePandasDataset):
         Create a new view of the Series.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.series_view(dtype=dtype)
+            data=self._query_compiler.series_view(dtype=dtype)
         )
 
     def where(
@@ -2390,7 +2390,7 @@ class Series(BasePandasDataset):
             Series of datetime64 dtype.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.to_datetime(**kwargs)
+            data=self._query_compiler.to_datetime(**kwargs)
         )
 
     def _to_numeric(self, **kwargs) -> Series:
@@ -2409,7 +2409,7 @@ class Series(BasePandasDataset):
             Series of numeric dtype.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.to_numeric(**kwargs)
+            data=self._query_compiler.to_numeric(**kwargs)
         )
 
     def _qcut(self, q, **kwargs):  # noqa: PR01, RT01, D200
@@ -2561,12 +2561,12 @@ class Series(BasePandasDataset):
             or type(new_query_compiler) in self._query_compiler.__class__.__bases__
         ), "Invalid Query Compiler object: {}".format(type(new_query_compiler))
         if not inplace and new_query_compiler.is_series_like():
-            return self.__constructor__(query_compiler=new_query_compiler)
+            return self.__constructor__(data=new_query_compiler)
         elif not inplace:
             # This can happen with things like `reset_index` where we can add columns.
             from .dataframe import DataFrame
 
-            return DataFrame(query_compiler=new_query_compiler)
+            return DataFrame(data=new_query_compiler)
         else:
             self._update_inplace(new_query_compiler=new_query_compiler)
 
@@ -2623,7 +2623,7 @@ class Series(BasePandasDataset):
             key = key._to_pandas()
         if is_bool_indexer(key):
             return self.__constructor__(
-                query_compiler=self._query_compiler.getitem_row_array(
+                data=self._query_compiler.getitem_row_array(
                     pandas.RangeIndex(len(self.index))[key]
                 )
             )
@@ -2650,7 +2650,7 @@ class Series(BasePandasDataset):
 
         if reduce_dimension:
             return self._reduce_dimension(result)
-        return self.__constructor__(query_compiler=result)
+        return self.__constructor__(data=result)
 
     def _repartition(self) -> Series:
         """
@@ -2699,7 +2699,7 @@ class Series(BasePandasDataset):
             return res
         # The current logic does not involve creating Modin objects
         # and manipulation with them in worker processes
-        return cls(query_compiler=query_compiler, name=name)
+        return cls(data=query_compiler, name=name)
 
     @classmethod
     def _inflate_full(cls, pandas_series, source_pid) -> Series:

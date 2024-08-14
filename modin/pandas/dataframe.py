@@ -405,7 +405,7 @@ class DataFrame(BasePandasDataset):
         """
         axis = 1 if axis is None else self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.add_prefix(prefix, axis)
+            data=self._query_compiler.add_prefix(prefix, axis)
         )
 
     def add_suffix(self, suffix, axis=None) -> DataFrame:  # noqa: PR01, RT01, D200
@@ -414,14 +414,14 @@ class DataFrame(BasePandasDataset):
         """
         axis = 1 if axis is None else self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.add_suffix(suffix, axis)
+            data=self._query_compiler.add_suffix(suffix, axis)
         )
 
     def map(self, func, na_action: Optional[str] = None, **kwargs) -> DataFrame:
         if not callable(func):
             raise ValueError("'{0}' object is not callable".format(type(func)))
         return self.__constructor__(
-            query_compiler=self._query_compiler.map(func, na_action=na_action, **kwargs)
+            data=self._query_compiler.map(func, na_action=na_action, **kwargs)
         )
 
     def applymap(self, func, na_action: Optional[str] = None, **kwargs) -> DataFrame:
@@ -490,7 +490,7 @@ class DataFrame(BasePandasDataset):
             else:
                 output_type = DataFrame
 
-        return output_type(query_compiler=query_compiler)
+        return output_type(data=query_compiler)
 
     def groupby(
         self,
@@ -639,7 +639,7 @@ class DataFrame(BasePandasDataset):
         # FIXME: Judging by pandas docs `*args` serves only compatibility purpose
         # and does not affect the result, we shouldn't pass it to the query compiler.
         return self.__constructor__(
-            query_compiler=self._query_compiler.transpose(*args)
+            data=self._query_compiler.transpose(*args)
         )
 
     T: DataFrame = property(transpose)
@@ -727,7 +727,7 @@ class DataFrame(BasePandasDataset):
             raise TypeError(f"Cannot compare DataFrame to {type(other)}")
         other = self._validate_other(other, 0, compare_index=True)
         return self.__constructor__(
-            query_compiler=self._query_compiler.compare(
+            data=self._query_compiler.compare(
                 other,
                 align_axis=align_axis,
                 keep_shape=keep_shape,
@@ -743,7 +743,7 @@ class DataFrame(BasePandasDataset):
         Compute pairwise correlation of columns, excluding NA/null values.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.corr(
+            data=self._query_compiler.corr(
                 method=method,
                 min_periods=min_periods,
                 numeric_only=numeric_only,
@@ -759,7 +759,7 @@ class DataFrame(BasePandasDataset):
         if not isinstance(other, (Series, DataFrame)):
             raise TypeError(f"unsupported type: {type(other)}")
         return self.__constructor__(
-            query_compiler=self._query_compiler.corrwith(
+            data=self._query_compiler.corrwith(
                 other=other._query_compiler,
                 axis=axis,
                 drop=drop,
@@ -788,7 +788,7 @@ class DataFrame(BasePandasDataset):
             return cov_df.__constructor__(result)
 
         return cov_df.__constructor__(
-            query_compiler=cov_df._query_compiler.cov(
+            data=cov_df._query_compiler.cov(
                 min_periods=min_periods, ddof=ddof
             )
         )
@@ -805,13 +805,13 @@ class DataFrame(BasePandasDataset):
             qc = other.reindex(index=common)._query_compiler
             if isinstance(other, DataFrame):
                 return self.__constructor__(
-                    query_compiler=self._query_compiler.dot(
+                    data=self._query_compiler.dot(
                         qc, squeeze_self=False, squeeze_other=False
                     )
                 )
             else:
                 return self._reduce_dimension(
-                    query_compiler=self._query_compiler.dot(
+                    data=self._query_compiler.dot(
                         qc, squeeze_self=False, squeeze_other=True
                     )
                 )
@@ -824,11 +824,11 @@ class DataFrame(BasePandasDataset):
 
         if len(other.shape) > 1:
             return self.__constructor__(
-                query_compiler=self._query_compiler.dot(other, squeeze_self=False)
+                data=self._query_compiler.dot(other, squeeze_self=False)
             )
 
         return self._reduce_dimension(
-            query_compiler=self._query_compiler.dot(other, squeeze_self=False)
+            data=self._query_compiler.dot(other, squeeze_self=False)
         )
 
     def eq(
@@ -857,7 +857,7 @@ class DataFrame(BasePandasDataset):
             return False
 
         result = self.__constructor__(
-            query_compiler=self._query_compiler.equals(other._query_compiler)
+            data=self._query_compiler.equals(other._query_compiler)
         )
         return result.all(axis=None)
 
@@ -1247,7 +1247,7 @@ class DataFrame(BasePandasDataset):
             other = self.__constructor__(other)
         if on is not None or how == "cross":
             return self.__constructor__(
-                query_compiler=self._query_compiler.join(
+                data=self._query_compiler.join(
                     other._query_compiler,
                     on=on,
                     how=how,
@@ -1282,7 +1282,7 @@ class DataFrame(BasePandasDataset):
                 .columns
             )
         new_frame = self.__constructor__(
-            query_compiler=self._query_compiler.concat(
+            data=self._query_compiler.concat(
                 1, [obj._query_compiler for obj in other], join=how, sort=sort
             )
         )
@@ -1338,7 +1338,7 @@ class DataFrame(BasePandasDataset):
             columns_name = self._query_compiler.get_index_name(axis=1)
             var_name = columns_name if columns_name is not None else "variable"
         return self.__constructor__(
-            query_compiler=self._query_compiler.melt(
+            data=self._query_compiler.melt(
                 id_vars=id_vars,
                 value_vars=value_vars,
                 var_name=var_name,
@@ -1386,7 +1386,7 @@ class DataFrame(BasePandasDataset):
             )
 
         return self.__constructor__(
-            query_compiler=self._query_compiler.merge(
+            data=self._query_compiler.merge(
                 right._query_compiler,
                 how=how,
                 on=on,
@@ -1464,7 +1464,7 @@ class DataFrame(BasePandasDataset):
         Return the first `n` rows ordered by `columns` in descending order.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.nlargest(n, columns, keep)
+            data=self._query_compiler.nlargest(n, columns, keep)
         )
 
     def nsmallest(
@@ -1474,7 +1474,7 @@ class DataFrame(BasePandasDataset):
         Return the first `n` rows ordered by `columns` in ascending order.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.nsmallest(
+            data=self._query_compiler.nsmallest(
                 n=n, columns=columns, keep=keep
             )
         )
@@ -1497,11 +1497,11 @@ class DataFrame(BasePandasDataset):
             is_multiindex and is_list_like(level) and len(level) == self.index.nlevels
         ):
             return self._reduce_dimension(
-                query_compiler=self._query_compiler.unstack(level, fill_value)
+                data=self._query_compiler.unstack(level, fill_value)
             )
         else:
             return self.__constructor__(
-                query_compiler=self._query_compiler.unstack(level, fill_value)
+                data=self._query_compiler.unstack(level, fill_value)
             )
 
     def pivot(
@@ -1525,7 +1525,7 @@ class DataFrame(BasePandasDataset):
                 values = [v for v in values if v not in columns]
 
         return self.__constructor__(
-            query_compiler=self._query_compiler.pivot(
+            data=self._query_compiler.pivot(
                 index=index, columns=columns, values=values
             )
         )
@@ -1551,7 +1551,7 @@ class DataFrame(BasePandasDataset):
             aggfunc = get_cython_func(aggfunc) or aggfunc
 
         result = self.__constructor__(
-            query_compiler=self._query_compiler.pivot_table(
+            data=self._query_compiler.pivot_table(
                 index=index,
                 values=values,
                 columns=columns,
@@ -2093,14 +2093,14 @@ class DataFrame(BasePandasDataset):
         """
         axis = self._get_axis_number(axis) if axis is not None else None
         if axis is None and (len(self.columns) == 1 or len(self.index) == 1):
-            return Series(query_compiler=self._query_compiler).squeeze()
+            return Series(data=self._query_compiler).squeeze()
         if axis == 1 and len(self.columns) == 1:
             self._query_compiler._shape_hint = "column"
-            return Series(query_compiler=self._query_compiler)
+            return Series(data=self._query_compiler)
         if axis == 0 and len(self.index) == 1:
             qc = self.T._query_compiler
             qc._shape_hint = "column"
-            return Series(query_compiler=qc)
+            return Series(data=qc)
         else:
             return self.copy()
 
@@ -2131,11 +2131,11 @@ class DataFrame(BasePandasDataset):
             is_multiindex and is_list_like(level) and len(level) == self.columns.nlevels
         ):
             return self._reduce_dimension(
-                query_compiler=self._query_compiler.stack(level, dropna)
+                data=self._query_compiler.stack(level, dropna)
             )
         else:
             return self.__constructor__(
-                query_compiler=self._query_compiler.stack(level, dropna)
+                data=self._query_compiler.stack(level, dropna)
             )
 
     def sub(
@@ -2598,7 +2598,7 @@ class DataFrame(BasePandasDataset):
         if key not in self.keys():
             raise KeyError("{}".format(key))
         s = self.__constructor__(
-            query_compiler=self._query_compiler.getitem_column_array([key])
+            data=self._query_compiler.getitem_column_array([key])
         ).squeeze(axis=1)
         if isinstance(s, Series):
             s._parent = self
@@ -3016,7 +3016,7 @@ class DataFrame(BasePandasDataset):
             or type(new_query_compiler) in self._query_compiler.__class__.__bases__
         ), "Invalid Query Compiler object: {}".format(type(new_query_compiler))
         if not inplace:
-            return self.__constructor__(query_compiler=new_query_compiler)
+            return self.__constructor__(data=new_query_compiler)
         else:
             self._update_inplace(new_query_compiler=new_query_compiler)
 
@@ -3179,7 +3179,7 @@ class DataFrame(BasePandasDataset):
         -------
         Series
         """
-        return Series(query_compiler=query_compiler)
+        return Series(data=query_compiler)
 
     def _set_axis_name(self, name, axis=0, inplace=False) -> Union[DataFrame, None]:
         """
@@ -3223,7 +3223,7 @@ class DataFrame(BasePandasDataset):
         Series of datetime64 dtype
         """
         return self._reduce_dimension(
-            query_compiler=self._query_compiler.to_datetime(**kwargs)
+            data=self._query_compiler.to_datetime(**kwargs)
         )
 
     def _getitem(self, key) -> Union[DataFrame, Series]:
@@ -3250,11 +3250,11 @@ class DataFrame(BasePandasDataset):
             pass
         if isinstance(key, Series):
             return self.__constructor__(
-                query_compiler=self._query_compiler.getitem_array(key._query_compiler)
+                data=self._query_compiler.getitem_array(key._query_compiler)
             )
         elif isinstance(key, (np.ndarray, pandas.Index, list)):
             return self.__constructor__(
-                query_compiler=self._query_compiler.getitem_array(key)
+                data=self._query_compiler.getitem_array(key)
             )
         elif isinstance(key, DataFrame):
             return self.where(key)
@@ -3289,7 +3289,7 @@ class DataFrame(BasePandasDataset):
             return query_compiler.to_pandas()
         # The current logic does not involve creating Modin objects
         # and manipulation with them in worker processes
-        return cls(query_compiler=query_compiler)
+        return cls(data=query_compiler)
 
     @classmethod
     def _inflate_full(cls, pandas_df, source_pid) -> DataFrame:

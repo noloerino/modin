@@ -65,28 +65,28 @@ class Window(ClassLogger):
 
     def mean(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.window_mean(
+            data=self._query_compiler.window_mean(
                 self.axis, self.window_kwargs, *args, **kwargs
             )
         )
 
     def sum(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.window_sum(
+            data=self._query_compiler.window_sum(
                 self.axis, self.window_kwargs, *args, **kwargs
             )
         )
 
     def var(self, ddof=1, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.window_var(
+            data=self._query_compiler.window_var(
                 self.axis, self.window_kwargs, ddof, *args, **kwargs
             )
         )
 
     def std(self, ddof=1, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.window_std(
+            data=self._query_compiler.window_std(
                 self.axis, self.window_kwargs, ddof, *args, **kwargs
             )
         )
@@ -167,7 +167,7 @@ class Rolling(ClassLogger):
             Result of the aggregation.
         """
         qc_result = self._call_qc_method(method_name, *args, **kwargs)
-        return self._dataframe.__constructor__(query_compiler=qc_result)
+        return self._dataframe.__constructor__(data=qc_result)
 
     def count(self):
         return self._aggregate("count")
@@ -245,7 +245,7 @@ class Rolling(ClassLogger):
         from .dataframe import DataFrame
 
         dataframe = DataFrame(
-            query_compiler=self._call_qc_method(
+            data=self._call_qc_method(
                 "aggregate",
                 func,
                 *args,
@@ -360,7 +360,7 @@ class Expanding(ClassLogger):
         from .dataframe import DataFrame
 
         dataframe = DataFrame(
-            query_compiler=self._query_compiler.expanding_aggregate(
+            data=self._query_compiler.expanding_aggregate(
                 self.axis, self.expanding_args, func, *args, **kwargs
             )
         )
@@ -374,35 +374,35 @@ class Expanding(ClassLogger):
 
     def sum(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_sum(
+            data=self._query_compiler.expanding_sum(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def min(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_min(
+            data=self._query_compiler.expanding_min(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def max(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_max(
+            data=self._query_compiler.expanding_max(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def mean(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_mean(
+            data=self._query_compiler.expanding_mean(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def median(self, numeric_only=False, engine=None, engine_kwargs=None, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_median(
+            data=self._query_compiler.expanding_median(
                 self.axis,
                 self.expanding_args,
                 numeric_only=numeric_only,
@@ -414,21 +414,21 @@ class Expanding(ClassLogger):
 
     def var(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_var(
+            data=self._query_compiler.expanding_var(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def std(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_std(
+            data=self._query_compiler.expanding_std(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
 
     def count(self, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_count(
+            data=self._query_compiler.expanding_count(
                 self.axis, self.expanding_args, *args, **kwargs
             )
         )
@@ -438,7 +438,7 @@ class Expanding(ClassLogger):
         from .series import Series
 
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_cov(
+            data=self._query_compiler.expanding_cov(
                 self.axis,
                 self.expanding_args,
                 squeeze_self=isinstance(self._dataframe, Series),
@@ -460,7 +460,7 @@ class Expanding(ClassLogger):
         from .series import Series
 
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_corr(
+            data=self._query_compiler.expanding_corr(
                 self.axis,
                 self.expanding_args,
                 squeeze_self=isinstance(self._dataframe, Series),
@@ -479,7 +479,7 @@ class Expanding(ClassLogger):
 
     def sem(self, ddof=1, numeric_only=False, *args, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_sem(
+            data=self._query_compiler.expanding_sem(
                 self.axis,
                 self.expanding_args,
                 ddof=ddof,
@@ -491,21 +491,21 @@ class Expanding(ClassLogger):
 
     def skew(self, numeric_only=False, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_skew(
+            data=self._query_compiler.expanding_skew(
                 self.axis, self.expanding_args, numeric_only=numeric_only, **kwargs
             )
         )
 
     def kurt(self, **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_kurt(
+            data=self._query_compiler.expanding_kurt(
                 self.axis, self.expanding_args, **kwargs
             )
         )
 
     def quantile(self, q, interpolation="linear", **kwargs):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_quantile(
+            data=self._query_compiler.expanding_quantile(
                 self.axis, self.expanding_args, q, interpolation, **kwargs
             )
         )
@@ -514,7 +514,7 @@ class Expanding(ClassLogger):
         self, method="average", ascending=True, pct=False, numeric_only=False, **kwargs
     ):
         return self._dataframe.__constructor__(
-            query_compiler=self._query_compiler.expanding_rank(
+            data=self._query_compiler.expanding_rank(
                 self.axis,
                 self.expanding_args,
                 method,

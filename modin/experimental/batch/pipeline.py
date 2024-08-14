@@ -380,7 +380,7 @@ class PandasQueryPipeline(object):
                 column_widths=list(map(len, internal_cols)),
             )
             query_compiler = PandasQueryCompiler(result_modin_frame)
-            result_df = pd.DataFrame(query_compiler=query_compiler)
+            result_df = pd.DataFrame(data=query_compiler)
             final_results[id] = result_df
 
         return final_results

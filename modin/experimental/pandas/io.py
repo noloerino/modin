@@ -116,8 +116,8 @@ def read_sql(
 
     result = FactoryDispatcher.read_sql_distributed(**kwargs)
     if isinstance(result, BaseQueryCompiler):
-        return DataFrame(query_compiler=result)
-    return (DataFrame(query_compiler=qc) for qc in result)
+        return DataFrame(data=result)
+    return (DataFrame(data=qc) for qc in result)
 
 
 @expanduser_path_arg("filepath_or_buffer")
@@ -160,7 +160,7 @@ def read_custom_text(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return DataFrame(query_compiler=FactoryDispatcher.read_custom_text(**kwargs))
+    return DataFrame(data=FactoryDispatcher.read_custom_text(**kwargs))
 
 
 # CSV and table
@@ -292,11 +292,11 @@ def _read(**kwargs) -> DataFrame:
     if isinstance(pd_obj, pandas.io.parsers.TextFileReader):
         reader = pd_obj.read
         pd_obj.read = lambda *args, **kwargs: DataFrame(
-            query_compiler=reader(*args, **kwargs)
+            data=reader(*args, **kwargs)
         )
         return pd_obj
 
-    return DataFrame(query_compiler=pd_obj)
+    return DataFrame(data=pd_obj)
 
 
 read_csv_glob = _make_parser_func(sep=",", funcname="read_csv_glob")
@@ -344,7 +344,7 @@ def read_pickle_glob(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return DataFrame(query_compiler=FactoryDispatcher.read_pickle_glob(**kwargs))
+    return DataFrame(data=FactoryDispatcher.read_pickle_glob(**kwargs))
 
 
 @expanduser_path_arg("filepath_or_buffer")
@@ -432,7 +432,7 @@ def read_parquet_glob(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return DataFrame(
-        query_compiler=FactoryDispatcher.read_parquet_glob(
+        data=FactoryDispatcher.read_parquet_glob(
             path=path,
             engine=engine,
             columns=columns,
@@ -531,7 +531,7 @@ def read_json_glob(
         )
 
     return DataFrame(
-        query_compiler=FactoryDispatcher.read_json_glob(
+        data=FactoryDispatcher.read_json_glob(
             path_or_buf=path_or_buf,
             orient=orient,
             typ=typ,
@@ -641,7 +641,7 @@ def read_xml_glob(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return DataFrame(
-        query_compiler=FactoryDispatcher.read_xml_glob(
+        data=FactoryDispatcher.read_xml_glob(
             path_or_buffer=path_or_buffer,
             xpath=xpath,
             namespaces=namespaces,

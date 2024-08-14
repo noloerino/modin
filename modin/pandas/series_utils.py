@@ -55,14 +55,14 @@ class ListAccessor(ClassLogger):
         return Series
 
     def flatten(self):
-        return self._Series(query_compiler=self._query_compiler.list_flatten())
+        return self._Series(data=self._query_compiler.list_flatten())
 
     def len(self):
-        return self._Series(query_compiler=self._query_compiler.list_len())
+        return self._Series(data=self._query_compiler.list_len())
 
     def __getitem__(self, key):
         return self._Series(
-            query_compiler=self._query_compiler.list__getitem__(key=key)
+            data=self._query_compiler.list__getitem__(key=key)
         )
 
 
@@ -84,11 +84,11 @@ class StructAccessor(ClassLogger):
 
     @property
     def dtypes(self):
-        return self._Series(query_compiler=self._query_compiler.struct_dtypes())
+        return self._Series(data=self._query_compiler.struct_dtypes())
 
     def field(self, name_or_index):
         return self._Series(
-            query_compiler=self._query_compiler.struct_field(
+            data=self._query_compiler.struct_field(
                 name_or_index=name_or_index
             )
         )
@@ -96,7 +96,7 @@ class StructAccessor(ClassLogger):
     def explode(self):
         from modin.pandas.dataframe import DataFrame
 
-        return DataFrame(query_compiler=self._query_compiler.struct_explode())
+        return DataFrame(data=self._query_compiler.struct_explode())
 
 
 @_inherit_docstrings(pandas.core.arrays.categorical.CategoricalAccessor)
@@ -132,7 +132,7 @@ class CategoryMethods(ClassLogger):
 
     @property
     def codes(self):
-        return self._Series(query_compiler=self._query_compiler.cat_codes())
+        return self._Series(data=self._query_compiler.cat_codes())
 
     def rename_categories(self, new_categories):
         return self._default_to_pandas(
@@ -211,7 +211,7 @@ class StringMethods(ClassLogger):
         return Series
 
     def casefold(self):
-        return self._Series(query_compiler=self._query_compiler.str_casefold())
+        return self._Series(data=self._query_compiler.str_casefold())
 
     def cat(self, others=None, sep=None, na_rep=None, join="left"):
         if isinstance(others, self._Series):
@@ -223,12 +223,12 @@ class StringMethods(ClassLogger):
         return (
             compiler_result.to_pandas().squeeze()
             if others is None
-            else self._Series(query_compiler=compiler_result)
+            else self._Series(data=compiler_result)
         )
 
     def decode(self, encoding, errors="strict"):
         return self._Series(
-            query_compiler=self._query_compiler.str_decode(encoding, errors)
+            data=self._query_compiler.str_decode(encoding, errors)
         )
 
     def split(self, pat=None, *, n=-1, expand=False, regex=None):
@@ -236,13 +236,13 @@ class StringMethods(ClassLogger):
             from .dataframe import DataFrame
 
             return DataFrame(
-                query_compiler=self._query_compiler.str_split(
+                data=self._query_compiler.str_split(
                     pat=pat, n=n, expand=True, regex=regex
                 )
             )
         else:
             return self._Series(
-                query_compiler=self._query_compiler.str_split(
+                data=self._query_compiler.str_split(
                     pat=pat, n=n, expand=expand, regex=regex
                 )
             )
@@ -255,33 +255,33 @@ class StringMethods(ClassLogger):
             from .dataframe import DataFrame
 
             return DataFrame(
-                query_compiler=self._query_compiler.str_rsplit(
+                data=self._query_compiler.str_rsplit(
                     pat=pat, n=n, expand=True
                 )
             )
         else:
             return self._Series(
-                query_compiler=self._query_compiler.str_rsplit(
+                data=self._query_compiler.str_rsplit(
                     pat=pat, n=n, expand=expand
                 )
             )
 
     def get(self, i):
-        return self._Series(query_compiler=self._query_compiler.str_get(i))
+        return self._Series(data=self._query_compiler.str_get(i))
 
     def join(self, sep):
         if sep is None:
             raise AttributeError("'NoneType' object has no attribute 'join'")
-        return self._Series(query_compiler=self._query_compiler.str_join(sep))
+        return self._Series(data=self._query_compiler.str_join(sep))
 
     def get_dummies(self, sep="|"):
-        return self._Series(query_compiler=self._query_compiler.str_get_dummies(sep))
+        return self._Series(data=self._query_compiler.str_get_dummies(sep))
 
     def contains(self, pat, case=True, flags=0, na=None, regex=True):
         if pat is None and not case:
             raise AttributeError("'NoneType' object has no attribute 'upper'")
         return self._Series(
-            query_compiler=self._query_compiler.str_contains(
+            data=self._query_compiler.str_contains(
                 pat, case=case, flags=flags, na=na, regex=regex
             )
         )
@@ -290,7 +290,7 @@ class StringMethods(ClassLogger):
         if not (isinstance(repl, str) or callable(repl)):
             raise TypeError("repl must be a string or callable")
         return self._Series(
-            query_compiler=self._query_compiler.str_replace(
+            data=self._query_compiler.str_replace(
                 pat, repl, n=n, case=case, flags=flags, regex=regex
             )
         )
@@ -299,7 +299,7 @@ class StringMethods(ClassLogger):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
         return self._Series(
-            query_compiler=self._query_compiler.str_pad(
+            data=self._query_compiler.str_pad(
                 width, side=side, fillchar=fillchar
             )
         )
@@ -308,45 +308,45 @@ class StringMethods(ClassLogger):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
         return self._Series(
-            query_compiler=self._query_compiler.str_center(width, fillchar=fillchar)
+            data=self._query_compiler.str_center(width, fillchar=fillchar)
         )
 
     def ljust(self, width, fillchar=" "):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
         return self._Series(
-            query_compiler=self._query_compiler.str_ljust(width, fillchar=fillchar)
+            data=self._query_compiler.str_ljust(width, fillchar=fillchar)
         )
 
     def rjust(self, width, fillchar=" "):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
         return self._Series(
-            query_compiler=self._query_compiler.str_rjust(width, fillchar=fillchar)
+            data=self._query_compiler.str_rjust(width, fillchar=fillchar)
         )
 
     def zfill(self, width):
-        return self._Series(query_compiler=self._query_compiler.str_zfill(width))
+        return self._Series(data=self._query_compiler.str_zfill(width))
 
     def wrap(self, width, **kwargs):
         if width <= 0:
             raise ValueError("invalid width {} (must be > 0)".format(width))
         return self._Series(
-            query_compiler=self._query_compiler.str_wrap(width, **kwargs)
+            data=self._query_compiler.str_wrap(width, **kwargs)
         )
 
     def slice(self, start=None, stop=None, step=None):
         if step == 0:
             raise ValueError("slice step cannot be zero")
         return self._Series(
-            query_compiler=self._query_compiler.str_slice(
+            data=self._query_compiler.str_slice(
                 start=start, stop=stop, step=step
             )
         )
 
     def slice_replace(self, start=None, stop=None, repl=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_slice_replace(
+            data=self._query_compiler.str_slice_replace(
                 start=start, stop=stop, repl=repl
             )
         )
@@ -355,36 +355,36 @@ class StringMethods(ClassLogger):
         if not isinstance(pat, (str, re.Pattern)):
             raise TypeError("first argument must be string or compiled pattern")
         return self._Series(
-            query_compiler=self._query_compiler.str_count(pat, flags=flags)
+            data=self._query_compiler.str_count(pat, flags=flags)
         )
 
     def startswith(self, pat, na=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_startswith(pat, na=na)
+            data=self._query_compiler.str_startswith(pat, na=na)
         )
 
     def encode(self, encoding, errors="strict"):
         return self._Series(
-            query_compiler=self._query_compiler.str_encode(encoding, errors)
+            data=self._query_compiler.str_encode(encoding, errors)
         )
 
     def endswith(self, pat, na=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_endswith(pat, na=na)
+            data=self._query_compiler.str_endswith(pat, na=na)
         )
 
     def findall(self, pat, flags=0):
         if not isinstance(pat, (str, re.Pattern)):
             raise TypeError("first argument must be string or compiled pattern")
         return self._Series(
-            query_compiler=self._query_compiler.str_findall(pat, flags=flags)
+            data=self._query_compiler.str_findall(pat, flags=flags)
         )
 
     def fullmatch(self, pat, case=True, flags=0, na=None):
         if not isinstance(pat, (str, re.Pattern)):
             raise TypeError("first argument must be string or compiled pattern")
         return self._Series(
-            query_compiler=self._query_compiler.str_fullmatch(
+            data=self._query_compiler.str_fullmatch(
                 pat, case=case, flags=flags, na=na
             )
         )
@@ -393,7 +393,7 @@ class StringMethods(ClassLogger):
         if not isinstance(pat, (str, re.Pattern)):
             raise TypeError("first argument must be string or compiled pattern")
         return self._Series(
-            query_compiler=self._query_compiler.str_match(
+            data=self._query_compiler.str_match(
                 pat, case=case, flags=flags, na=na
             )
         )
@@ -405,32 +405,32 @@ class StringMethods(ClassLogger):
         from .dataframe import DataFrame
 
         return (
-            DataFrame(query_compiler=query_compiler)
+            DataFrame(data=query_compiler)
             if expand or re.compile(pat).groups > 1
-            else self._Series(query_compiler=query_compiler)
+            else self._Series(data=query_compiler)
         )
 
     def extractall(self, pat, flags=0):
         return self._Series(
-            query_compiler=self._query_compiler.str_extractall(pat, flags)
+            data=self._query_compiler.str_extractall(pat, flags)
         )
 
     def len(self):
-        return self._Series(query_compiler=self._query_compiler.str_len())
+        return self._Series(data=self._query_compiler.str_len())
 
     def strip(self, to_strip=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_strip(to_strip=to_strip)
+            data=self._query_compiler.str_strip(to_strip=to_strip)
         )
 
     def rstrip(self, to_strip=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_rstrip(to_strip=to_strip)
+            data=self._query_compiler.str_rstrip(to_strip=to_strip)
         )
 
     def lstrip(self, to_strip=None):
         return self._Series(
-            query_compiler=self._query_compiler.str_lstrip(to_strip=to_strip)
+            data=self._query_compiler.str_lstrip(to_strip=to_strip)
         )
 
     def partition(self, sep=" ", expand=True):
@@ -440,21 +440,21 @@ class StringMethods(ClassLogger):
         from .dataframe import DataFrame
 
         return (DataFrame if expand else self._Series)(
-            query_compiler=self._query_compiler.str_partition(sep=sep, expand=expand)
+            data=self._query_compiler.str_partition(sep=sep, expand=expand)
         )
 
     def removeprefix(self, prefix):
         return self._Series(
-            query_compiler=self._query_compiler.str_removeprefix(prefix)
+            data=self._query_compiler.str_removeprefix(prefix)
         )
 
     def removesuffix(self, suffix):
         return self._Series(
-            query_compiler=self._query_compiler.str_removesuffix(suffix)
+            data=self._query_compiler.str_removesuffix(suffix)
         )
 
     def repeat(self, repeats):
-        return self._Series(query_compiler=self._query_compiler.str_repeat(repeats))
+        return self._Series(data=self._query_compiler.str_repeat(repeats))
 
     def rpartition(self, sep=" ", expand=True):
         if sep is not None and len(sep) == 0:
@@ -463,17 +463,17 @@ class StringMethods(ClassLogger):
         from .dataframe import DataFrame
 
         return (DataFrame if expand else self._Series)(
-            query_compiler=self._query_compiler.str_rpartition(sep=sep, expand=expand)
+            data=self._query_compiler.str_rpartition(sep=sep, expand=expand)
         )
 
     def lower(self):
-        return self._Series(query_compiler=self._query_compiler.str_lower())
+        return self._Series(data=self._query_compiler.str_lower())
 
     def upper(self):
-        return self._Series(query_compiler=self._query_compiler.str_upper())
+        return self._Series(data=self._query_compiler.str_upper())
 
     def title(self):
-        return self._Series(query_compiler=self._query_compiler.str_title())
+        return self._Series(data=self._query_compiler.str_title())
 
     def find(self, sub, start=0, end=None):
         if not isinstance(sub, str):
@@ -481,7 +481,7 @@ class StringMethods(ClassLogger):
                 "expected a string object, not {0}".format(type(sub).__name__)
             )
         return self._Series(
-            query_compiler=self._query_compiler.str_find(sub, start=start, end=end)
+            data=self._query_compiler.str_find(sub, start=start, end=end)
         )
 
     def rfind(self, sub, start=0, end=None):
@@ -490,7 +490,7 @@ class StringMethods(ClassLogger):
                 "expected a string object, not {0}".format(type(sub).__name__)
             )
         return self._Series(
-            query_compiler=self._query_compiler.str_rfind(sub, start=start, end=end)
+            data=self._query_compiler.str_rfind(sub, start=start, end=end)
         )
 
     def index(self, sub, start=0, end=None):
@@ -499,7 +499,7 @@ class StringMethods(ClassLogger):
                 "expected a string object, not {0}".format(type(sub).__name__)
             )
         return self._Series(
-            query_compiler=self._query_compiler.str_index(sub, start=start, end=end)
+            data=self._query_compiler.str_index(sub, start=start, end=end)
         )
 
     def rindex(self, sub, start=0, end=None):
@@ -508,50 +508,50 @@ class StringMethods(ClassLogger):
                 "expected a string object, not {0}".format(type(sub).__name__)
             )
         return self._Series(
-            query_compiler=self._query_compiler.str_rindex(sub, start=start, end=end)
+            data=self._query_compiler.str_rindex(sub, start=start, end=end)
         )
 
     def capitalize(self):
-        return self._Series(query_compiler=self._query_compiler.str_capitalize())
+        return self._Series(data=self._query_compiler.str_capitalize())
 
     def swapcase(self):
-        return self._Series(query_compiler=self._query_compiler.str_swapcase())
+        return self._Series(data=self._query_compiler.str_swapcase())
 
     def normalize(self, form):
-        return self._Series(query_compiler=self._query_compiler.str_normalize(form))
+        return self._Series(data=self._query_compiler.str_normalize(form))
 
     def translate(self, table):
-        return self._Series(query_compiler=self._query_compiler.str_translate(table))
+        return self._Series(data=self._query_compiler.str_translate(table))
 
     def isalnum(self):
-        return self._Series(query_compiler=self._query_compiler.str_isalnum())
+        return self._Series(data=self._query_compiler.str_isalnum())
 
     def isalpha(self):
-        return self._Series(query_compiler=self._query_compiler.str_isalpha())
+        return self._Series(data=self._query_compiler.str_isalpha())
 
     def isdigit(self):
-        return self._Series(query_compiler=self._query_compiler.str_isdigit())
+        return self._Series(data=self._query_compiler.str_isdigit())
 
     def isspace(self):
-        return self._Series(query_compiler=self._query_compiler.str_isspace())
+        return self._Series(data=self._query_compiler.str_isspace())
 
     def islower(self):
-        return self._Series(query_compiler=self._query_compiler.str_islower())
+        return self._Series(data=self._query_compiler.str_islower())
 
     def isupper(self):
-        return self._Series(query_compiler=self._query_compiler.str_isupper())
+        return self._Series(data=self._query_compiler.str_isupper())
 
     def istitle(self):
-        return self._Series(query_compiler=self._query_compiler.str_istitle())
+        return self._Series(data=self._query_compiler.str_istitle())
 
     def isnumeric(self):
-        return self._Series(query_compiler=self._query_compiler.str_isnumeric())
+        return self._Series(data=self._query_compiler.str_isnumeric())
 
     def isdecimal(self):
-        return self._Series(query_compiler=self._query_compiler.str_isdecimal())
+        return self._Series(data=self._query_compiler.str_isdecimal())
 
     def __getitem__(self, key):  # noqa: GL08
-        return self._Series(query_compiler=self._query_compiler.str___getitem__(key))
+        return self._Series(data=self._query_compiler.str___getitem__(key))
 
     def _default_to_pandas(self, op, *args, **kwargs):
         """
@@ -594,103 +594,103 @@ class DatetimeProperties(ClassLogger):  # noqa: GL08
 
     @property
     def date(self):
-        return self._Series(query_compiler=self._query_compiler.dt_date())
+        return self._Series(data=self._query_compiler.dt_date())
 
     @property
     def time(self):
-        return self._Series(query_compiler=self._query_compiler.dt_time())
+        return self._Series(data=self._query_compiler.dt_time())
 
     @property
     def timetz(self):
-        return self._Series(query_compiler=self._query_compiler.dt_timetz())
+        return self._Series(data=self._query_compiler.dt_timetz())
 
     @property
     def year(self):
-        return self._Series(query_compiler=self._query_compiler.dt_year())
+        return self._Series(data=self._query_compiler.dt_year())
 
     @property
     def month(self):
-        return self._Series(query_compiler=self._query_compiler.dt_month())
+        return self._Series(data=self._query_compiler.dt_month())
 
     @property
     def day(self):
-        return self._Series(query_compiler=self._query_compiler.dt_day())
+        return self._Series(data=self._query_compiler.dt_day())
 
     @property
     def hour(self):
-        return self._Series(query_compiler=self._query_compiler.dt_hour())
+        return self._Series(data=self._query_compiler.dt_hour())
 
     @property
     def minute(self):
-        return self._Series(query_compiler=self._query_compiler.dt_minute())
+        return self._Series(data=self._query_compiler.dt_minute())
 
     @property
     def second(self):
-        return self._Series(query_compiler=self._query_compiler.dt_second())
+        return self._Series(data=self._query_compiler.dt_second())
 
     @property
     def microsecond(self):
-        return self._Series(query_compiler=self._query_compiler.dt_microsecond())
+        return self._Series(data=self._query_compiler.dt_microsecond())
 
     @property
     def nanosecond(self):
-        return self._Series(query_compiler=self._query_compiler.dt_nanosecond())
+        return self._Series(data=self._query_compiler.dt_nanosecond())
 
     @property
     def dayofweek(self):
-        return self._Series(query_compiler=self._query_compiler.dt_dayofweek())
+        return self._Series(data=self._query_compiler.dt_dayofweek())
 
     day_of_week = dayofweek
 
     @property
     def weekday(self):
-        return self._Series(query_compiler=self._query_compiler.dt_weekday())
+        return self._Series(data=self._query_compiler.dt_weekday())
 
     @property
     def dayofyear(self):
-        return self._Series(query_compiler=self._query_compiler.dt_dayofyear())
+        return self._Series(data=self._query_compiler.dt_dayofyear())
 
     day_of_year = dayofyear
 
     @property
     def quarter(self):
-        return self._Series(query_compiler=self._query_compiler.dt_quarter())
+        return self._Series(data=self._query_compiler.dt_quarter())
 
     @property
     def is_month_start(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_month_start())
+        return self._Series(data=self._query_compiler.dt_is_month_start())
 
     @property
     def is_month_end(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_month_end())
+        return self._Series(data=self._query_compiler.dt_is_month_end())
 
     @property
     def is_quarter_start(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_quarter_start())
+        return self._Series(data=self._query_compiler.dt_is_quarter_start())
 
     @property
     def is_quarter_end(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_quarter_end())
+        return self._Series(data=self._query_compiler.dt_is_quarter_end())
 
     @property
     def is_year_start(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_year_start())
+        return self._Series(data=self._query_compiler.dt_is_year_start())
 
     @property
     def is_year_end(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_year_end())
+        return self._Series(data=self._query_compiler.dt_is_year_end())
 
     @property
     def is_leap_year(self):
-        return self._Series(query_compiler=self._query_compiler.dt_is_leap_year())
+        return self._Series(data=self._query_compiler.dt_is_leap_year())
 
     @property
     def daysinmonth(self):
-        return self._Series(query_compiler=self._query_compiler.dt_daysinmonth())
+        return self._Series(data=self._query_compiler.dt_daysinmonth())
 
     @property
     def days_in_month(self):
-        return self._Series(query_compiler=self._query_compiler.dt_days_in_month())
+        return self._Series(data=self._query_compiler.dt_days_in_month())
 
     @property
     def tz(self) -> "tzinfo | None":
@@ -706,76 +706,76 @@ class DatetimeProperties(ClassLogger):  # noqa: GL08
     @property
     def unit(self):  # noqa: GL08
         # use `iloc[0]` to return scalar
-        return self._Series(query_compiler=self._query_compiler.dt_unit()).iloc[0]
+        return self._Series(data=self._query_compiler.dt_unit()).iloc[0]
 
     def as_unit(self, *args, **kwargs):  # noqa: GL08
         return self._Series(
-            query_compiler=self._query_compiler.dt_as_unit(*args, **kwargs)
+            data=self._query_compiler.dt_as_unit(*args, **kwargs)
         )
 
     def to_period(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_to_period(*args, **kwargs)
+            data=self._query_compiler.dt_to_period(*args, **kwargs)
         )
 
     def asfreq(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_asfreq(*args, **kwargs)
+            data=self._query_compiler.dt_asfreq(*args, **kwargs)
         )
 
     def to_pydatetime(self):
         return self._Series(
-            query_compiler=self._query_compiler.dt_to_pydatetime()
+            data=self._query_compiler.dt_to_pydatetime()
         ).to_numpy()
 
     def tz_localize(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_tz_localize(*args, **kwargs)
+            data=self._query_compiler.dt_tz_localize(*args, **kwargs)
         )
 
     def tz_convert(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_tz_convert(*args, **kwargs)
+            data=self._query_compiler.dt_tz_convert(*args, **kwargs)
         )
 
     def normalize(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_normalize(*args, **kwargs)
+            data=self._query_compiler.dt_normalize(*args, **kwargs)
         )
 
     def strftime(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_strftime(*args, **kwargs)
+            data=self._query_compiler.dt_strftime(*args, **kwargs)
         )
 
     def round(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_round(*args, **kwargs)
+            data=self._query_compiler.dt_round(*args, **kwargs)
         )
 
     def floor(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_floor(*args, **kwargs)
+            data=self._query_compiler.dt_floor(*args, **kwargs)
         )
 
     def ceil(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_ceil(*args, **kwargs)
+            data=self._query_compiler.dt_ceil(*args, **kwargs)
         )
 
     def month_name(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_month_name(*args, **kwargs)
+            data=self._query_compiler.dt_month_name(*args, **kwargs)
         )
 
     def day_name(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_day_name(*args, **kwargs)
+            data=self._query_compiler.dt_day_name(*args, **kwargs)
         )
 
     def total_seconds(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_total_seconds(*args, **kwargs)
+            data=self._query_compiler.dt_total_seconds(*args, **kwargs)
         )
 
     def to_pytimedelta(self) -> "npt.NDArray[np.object_]":
@@ -784,44 +784,44 @@ class DatetimeProperties(ClassLogger):  # noqa: GL08
 
     @property
     def seconds(self):
-        return self._Series(query_compiler=self._query_compiler.dt_seconds())
+        return self._Series(data=self._query_compiler.dt_seconds())
 
     @property
     def days(self):
-        return self._Series(query_compiler=self._query_compiler.dt_days())
+        return self._Series(data=self._query_compiler.dt_days())
 
     @property
     def microseconds(self):
-        return self._Series(query_compiler=self._query_compiler.dt_microseconds())
+        return self._Series(data=self._query_compiler.dt_microseconds())
 
     @property
     def nanoseconds(self):
-        return self._Series(query_compiler=self._query_compiler.dt_nanoseconds())
+        return self._Series(data=self._query_compiler.dt_nanoseconds())
 
     @property
     def components(self):
         from .dataframe import DataFrame
 
-        return DataFrame(query_compiler=self._query_compiler.dt_components())
+        return DataFrame(data=self._query_compiler.dt_components())
 
     def isocalendar(self):
         from .dataframe import DataFrame
 
-        return DataFrame(query_compiler=self._query_compiler.dt_isocalendar())
+        return DataFrame(data=self._query_compiler.dt_isocalendar())
 
     @property
     def qyear(self):  # noqa: GL08
-        return self._Series(query_compiler=self._query_compiler.dt_qyear())
+        return self._Series(data=self._query_compiler.dt_qyear())
 
     @property
     def start_time(self):
-        return self._Series(query_compiler=self._query_compiler.dt_start_time())
+        return self._Series(data=self._query_compiler.dt_start_time())
 
     @property
     def end_time(self):
-        return self._Series(query_compiler=self._query_compiler.dt_end_time())
+        return self._Series(data=self._query_compiler.dt_end_time())
 
     def to_timestamp(self, *args, **kwargs):
         return self._Series(
-            query_compiler=self._query_compiler.dt_to_timestamp(*args, **kwargs)
+            data=self._query_compiler.dt_to_timestamp(*args, **kwargs)
         )

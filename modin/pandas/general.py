@@ -140,7 +140,7 @@ def merge_ordered(
             )
 
     return DataFrame(
-        query_compiler=left._query_compiler.merge_ordered(
+        data=left._query_compiler.merge_ordered(
             right._query_compiler,
             on=on,
             left_on=left_on,
@@ -208,7 +208,7 @@ def merge_asof(
         raise ValueError("Must pass on, right_on, or right_index=True")
 
     return DataFrame(
-        query_compiler=left._query_compiler.merge_asof(
+        data=left._query_compiler.merge_asof(
             right._query_compiler,
             left_on,
             right_on,
@@ -345,7 +345,7 @@ def cut(
 
     def _wrap_in_series_object(qc_result):
         if isinstance(qc_result, type(x._query_compiler)):
-            return Series(query_compiler=qc_result)
+            return Series(data=qc_result)
         if isinstance(qc_result, (tuple, list)):
             return tuple([_wrap_in_series_object(result) for result in qc_result])
         return qc_result
@@ -470,7 +470,7 @@ def concat(
     all_series = all(isinstance(obj, Series) for obj in list_of_objs)
     if all_series and axis == 0:
         return Series(
-            query_compiler=list_of_objs[0]._query_compiler.concat(
+            data=list_of_objs[0]._query_compiler.concat(
                 axis,
                 [o._query_compiler for o in list_of_objs[1:]],
                 join=join,
@@ -555,7 +555,7 @@ def concat(
         copy=True,
         sort=sort,
     )
-    result_df = DataFrame(query_compiler=new_query_compiler)
+    result_df = DataFrame(data=new_query_compiler)
     if new_idx is not None:
         if axis == 0:
             result_df.index = new_idx
@@ -656,7 +656,7 @@ def get_dummies(
             drop_first=drop_first,
             dtype=dtype,
         )
-        return DataFrame(query_compiler=new_manager)
+        return DataFrame(data=new_manager)
 
 
 @_inherit_docstrings(pandas.melt, apilink="pandas.melt")
@@ -759,7 +759,7 @@ def wide_to_long(
             "can not wide_to_long with instance of type {}".format(type(df))
         )
     return DataFrame(
-        query_compiler=df._query_compiler.wide_to_long(
+        data=df._query_compiler.wide_to_long(
             stubnames=stubnames,
             i=i,
             j=j,
@@ -813,5 +813,5 @@ def to_timedelta(
     """
     if isinstance(arg, Series):
         query_compiler = arg._query_compiler.to_timedelta(unit=unit, errors=errors)
-        return Series(query_compiler=query_compiler)
+        return Series(data=query_compiler)
     return pandas.to_timedelta(arg, unit=unit, errors=errors)

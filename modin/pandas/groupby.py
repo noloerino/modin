@@ -316,7 +316,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
         from .dataframe import DataFrame
 
         return DataFrame(
-            query_compiler=self._query_compiler.groupby_ohlc(
+            data=self._query_compiler.groupby_ohlc(
                 by=self._by,
                 axis=self._axis,
                 groupby_kwargs=self._kwargs,
@@ -462,7 +462,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
                     )
                     == 0
                 )
-                and DataFrame(query_compiler=self._by.isna()).any(axis=None)
+                and DataFrame(data=self._by.isna()).any(axis=None)
             ):
                 mask_nan_rows = data[self._by.columns].isna().any(axis=1)
                 result = result.loc[~mask_nan_rows]
@@ -1483,7 +1483,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
                 (
                     (k,) if self._return_tuple_when_iterating else k,
                     DataFrame(
-                        query_compiler=self._query_compiler.getitem_row_array(
+                        data=self._query_compiler.getitem_row_array(
                             indices[k]
                         )
                     ),
@@ -1495,7 +1495,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
                 (
                     (k,) if self._return_tuple_when_iterating else k,
                     DataFrame(
-                        query_compiler=self._query_compiler.getitem_column_array(
+                        data=self._query_compiler.getitem_column_array(
                             indices[k], numeric=True
                         )
                     ),
@@ -1643,7 +1643,7 @@ class DataFrameGroupBy(ClassLogger):  # noqa: GL08
             groupby_qc = self._query_compiler
 
         return type(self._df)(
-            query_compiler=qc_method(
+            data=qc_method(
                 groupby_qc,
                 by=self._by,
                 axis=self._axis,
@@ -1764,7 +1764,7 @@ class SeriesGroupBy(DataFrameGroupBy):  # noqa: GL08
                 (
                     k,
                     Series(
-                        query_compiler=self._query_compiler.getitem_row_array(
+                        data=self._query_compiler.getitem_row_array(
                             indices[k]
                         )
                     ),
@@ -1776,7 +1776,7 @@ class SeriesGroupBy(DataFrameGroupBy):  # noqa: GL08
                 (
                     k,
                     Series(
-                        query_compiler=self._query_compiler.getitem_column_array(
+                        data=self._query_compiler.getitem_column_array(
                             indices[k], numeric=True
                         )
                     ),
@@ -1982,7 +1982,7 @@ class SeriesGroupBy(DataFrameGroupBy):  # noqa: GL08
             from .dataframe import DataFrame
 
             result = DataFrame(
-                query_compiler=self._query_compiler.groupby_agg(
+                data=self._query_compiler.groupby_agg(
                     by=self._by,
                     agg_func=func,
                     axis=self._axis,

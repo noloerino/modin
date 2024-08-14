@@ -272,4 +272,4 @@ def from_partitions(
     if labels_axis_to_sync != -1:
         frame.synchronize_labels(axis=labels_axis_to_sync)
 
-    return DataFrame(query_compiler=PandasQueryCompiler(frame))
+    return DataFrame(data=PandasQueryCompiler(frame))

@@ -633,7 +633,7 @@ class BasePandasDataset(ClassLogger):
         Return a `BasePandasDataset` with absolute numeric value of each element.
         """
         self._validate_dtypes(numeric_only=True)
-        return self.__constructor__(query_compiler=self._query_compiler.abs())
+        return self.__constructor__(data=self._query_compiler.abs())
 
     def _set_index(self, new_index) -> None:
         """
@@ -853,8 +853,8 @@ class BasePandasDataset(ClassLogger):
             fill_axis=fill_axis,
             broadcast_axis=broadcast_axis,
         )
-        return self.__constructor__(query_compiler=left), self.__constructor__(
-            query_compiler=right
+        return self.__constructor__(data=left), self.__constructor__(
+            data=right
         )
 
     @abc.abstractmethod
@@ -1016,7 +1016,7 @@ class BasePandasDataset(ClassLogger):
         Convert time series to specified frequency.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.asfreq(
+            data=self._query_compiler.asfreq(
                 freq=freq,
                 method=method,
                 how=how,
@@ -1276,8 +1276,8 @@ class BasePandasDataset(ClassLogger):
         Make a copy of the object's metadata.
         """
         if deep:
-            return self.__constructor__(query_compiler=self._query_compiler.copy())
-        new_obj = self.__constructor__(query_compiler=self._query_compiler)
+            return self.__constructor__(data=self._query_compiler.copy())
+        new_obj = self.__constructor__(data=self._query_compiler)
         self._add_sibling(new_obj)
         return new_obj
 
@@ -1308,7 +1308,7 @@ class BasePandasDataset(ClassLogger):
         return self.__constructor__(
             # FIXME: Judging by pandas docs `*args` and `**kwargs` serves only compatibility
             # purpose and does not affect the result, we shouldn't pass them to the query compiler.
-            query_compiler=self._query_compiler.cummax(
+            data=self._query_compiler.cummax(
                 fold_axis=axis, axis=axis, skipna=skipna, **kwargs
             )
         )
@@ -1325,7 +1325,7 @@ class BasePandasDataset(ClassLogger):
         return self.__constructor__(
             # FIXME: Judging by pandas docs `*args` and `**kwargs` serves only compatibility
             # purpose and does not affect the result, we shouldn't pass them to the query compiler.
-            query_compiler=self._query_compiler.cummin(
+            data=self._query_compiler.cummin(
                 fold_axis=axis, axis=axis, skipna=skipna, **kwargs
             )
         )
@@ -1341,7 +1341,7 @@ class BasePandasDataset(ClassLogger):
         return self.__constructor__(
             # FIXME: Judging by pandas docs `**kwargs` serves only compatibility
             # purpose and does not affect the result, we shouldn't pass them to the query compiler.
-            query_compiler=self._query_compiler.cumprod(
+            data=self._query_compiler.cumprod(
                 fold_axis=axis, axis=axis, skipna=skipna, **kwargs
             )
         )
@@ -1357,7 +1357,7 @@ class BasePandasDataset(ClassLogger):
         return self.__constructor__(
             # FIXME: Judging by pandas docs `*args` and `**kwargs` serves only compatibility
             # purpose and does not affect the result, we shouldn't pass them to the query compiler.
-            query_compiler=self._query_compiler.cumsum(
+            data=self._query_compiler.cumsum(
                 fold_axis=axis, axis=axis, skipna=skipna, **kwargs
             )
         )
@@ -1397,7 +1397,7 @@ class BasePandasDataset(ClassLogger):
             # Match pandas error from concatenting empty list of series descriptions.
             raise ValueError("No objects to concatenate")
         return self.__constructor__(
-            query_compiler=data._query_compiler.describe(percentiles=percentiles)
+            data=data._query_compiler.describe(percentiles=percentiles)
         )
 
     def diff(self, periods=1, axis=0) -> Self:  # noqa: PR01, RT01, D200
@@ -1415,7 +1415,7 @@ class BasePandasDataset(ClassLogger):
 
         axis = self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.diff(axis=axis, periods=periods)
+            data=self._query_compiler.diff(axis=axis, periods=periods)
         )
 
     def drop(
@@ -1588,7 +1588,7 @@ class BasePandasDataset(ClassLogger):
         result_qc = self._query_compiler.unique(
             keep=keep, ignore_index=ignore_index, subset=subset
         )
-        result = self.__constructor__(query_compiler=result_qc)
+        result = self.__constructor__(data=result_qc)
         if inplace:
             self._update_inplace(result._query_compiler)
         else:
@@ -1607,7 +1607,7 @@ class BasePandasDataset(ClassLogger):
         Transform each element of a list-like to a row.
         """
         exploded = self.__constructor__(
-            query_compiler=self._query_compiler.explode(column)
+            data=self._query_compiler.explode(column)
         )
         if ignore_index:
             exploded = exploded.reset_index(drop=True)
@@ -1984,7 +1984,7 @@ class BasePandasDataset(ClassLogger):
         Convert columns to best possible dtypes using dtypes supporting ``pd.NA``.
         """
         return self.__constructor__(
-            query_compiler=self._query_compiler.convert_dtypes(
+            data=self._query_compiler.convert_dtypes(
                 infer_objects=infer_objects,
                 convert_string=convert_string,
                 convert_integer=convert_integer,
@@ -2003,7 +2003,7 @@ class BasePandasDataset(ClassLogger):
         ignore_indices = isinstance(values, Series)
         values = getattr(values, "_query_compiler", values)
         return self.__constructor__(
-            query_compiler=self._query_compiler.isin(
+            data=self._query_compiler.isin(
                 values=values, ignore_indices=ignore_indices
             )
         )
@@ -2012,7 +2012,7 @@ class BasePandasDataset(ClassLogger):
         """
         Detect missing values.
         """
-        return self.__constructor__(query_compiler=self._query_compiler.isna())
+        return self.__constructor__(data=self._query_compiler.isna())
 
     isnull: Self = isna
 
@@ -2253,7 +2253,7 @@ class BasePandasDataset(ClassLogger):
         """
         axis = self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.mode(
+            data=self._query_compiler.mode(
                 axis=axis, numeric_only=numeric_only, dropna=dropna
             )
         )
@@ -2280,7 +2280,7 @@ class BasePandasDataset(ClassLogger):
         """
         Detect existing (non-missing) values.
         """
-        return self.__constructor__(query_compiler=self._query_compiler.notna())
+        return self.__constructor__(data=self._query_compiler.notna())
 
     notnull: Self = notna
 
@@ -2336,7 +2336,7 @@ class BasePandasDataset(ClassLogger):
                 raise TypeError(f"unsupported operand type for /: got {dtype}")
 
         return self.__constructor__(
-            query_compiler=self._query_compiler.pct_change(
+            data=self._query_compiler.pct_change(
                 periods=periods,
                 fill_method=fill_method,
                 limit=limit,
@@ -2412,7 +2412,7 @@ class BasePandasDataset(ClassLogger):
         axis = numeric_only_df._get_axis_number(axis)
         if isinstance(q, (pandas.Series, np.ndarray, pandas.Index, list, tuple)):
             return numeric_only_df.__constructor__(
-                query_compiler=numeric_only_df._query_compiler.quantile_for_list_of_values(
+                data=numeric_only_df._query_compiler.quantile_for_list_of_values(
                     q=q,
                     axis=axis,
                     # `numeric_only=True` has already been processed by using `self.drop` function
@@ -2452,7 +2452,7 @@ class BasePandasDataset(ClassLogger):
             )
         axis = self._get_axis_number(axis)
         return self.__constructor__(
-            query_compiler=self._query_compiler.rank(
+            data=self._query_compiler.rank(
                 axis=axis,
                 method=method,
                 numeric_only=numeric_only,
@@ -2795,7 +2795,7 @@ class BasePandasDataset(ClassLogger):
         # FIXME: Judging by pandas docs `*args` and `**kwargs` serves only compatibility
         # purpose and does not affect the result, we shouldn't pass them to the query compiler.
         return self.__constructor__(
-            query_compiler=self._query_compiler.round(decimals=decimals, **kwargs)
+            data=self._query_compiler.round(decimals=decimals, **kwargs)
         )
 
     def rpow(
@@ -2951,10 +2951,10 @@ class BasePandasDataset(ClassLogger):
             )
         if axis:
             query_compiler = self._query_compiler.getitem_column_array(samples)
-            return self.__constructor__(query_compiler=query_compiler)
+            return self.__constructor__(data=query_compiler)
         else:
             query_compiler = self._query_compiler.getitem_row_array(samples)
-            return self.__constructor__(query_compiler=query_compiler)
+            return self.__constructor__(data=query_compiler)
 
     def sem(
         self,
@@ -4119,7 +4119,7 @@ class BasePandasDataset(ClassLogger):
                     )
                 )
             )
-        return self.__constructor__(query_compiler=self._query_compiler.invert())
+        return self.__constructor__(data=self._query_compiler.invert())
 
     @_doc_binary_op(
         operation="less than or equal comparison",
@@ -4182,7 +4182,7 @@ class BasePandasDataset(ClassLogger):
         BasePandasDataset
         """
         self._validate_dtypes(numeric_only=True)
-        return self.__constructor__(query_compiler=self._query_compiler.negative())
+        return self.__constructor__(data=self._query_compiler.negative())
 
     def __nonzero__(self):
         """
@@ -4294,7 +4294,7 @@ class BasePandasDataset(ClassLogger):
                 f"Passed `axis` parameter: {axis}, but should be one of {allowed_axis_values}"
             )
         return self.__constructor__(
-            query_compiler=self._query_compiler.repartition(axis=axis)
+            data=self._query_compiler.repartition(axis=axis)
         )
 
     @disable_logging

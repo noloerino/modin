@@ -43,124 +43,124 @@ class BasePolarsDataset:
 
     def __eq__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.eq(
+            _data=self._query_compiler.eq(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __ne__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.ne(
+            _data=self._query_compiler.ne(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __add__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.add(
+            _data=self._query_compiler.add(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __sub__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.sub(
+            _data=self._query_compiler.sub(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __mul__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.mul(
+            _data=self._query_compiler.mul(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __truediv__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.truediv(
+            _data=self._query_compiler.truediv(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __floordiv__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.floordiv(
+            _data=self._query_compiler.floordiv(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __mod__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.mod(
+            _data=self._query_compiler.mod(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __pow__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.pow(
+            _data=self._query_compiler.pow(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __and__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.__and__(
+            _data=self._query_compiler.__and__(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __or__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.__or__(
+            _data=self._query_compiler.__or__(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __xor__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.__xor__(
+            _data=self._query_compiler.__xor__(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __lt__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.lt(
+            _data=self._query_compiler.lt(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __le__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.le(
+            _data=self._query_compiler.le(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __gt__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.gt(
+            _data=self._query_compiler.gt(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __ge__(self, other) -> "BasePolarsDataset":
         return self.__constructor__(
-            _query_compiler=self._query_compiler.ge(
+            _data=self._query_compiler.ge(
                 other._query_compiler if isinstance(other, BasePolarsDataset) else other
             )
         )
 
     def __invert__(self) -> "BasePolarsDataset":
-        return self.__constructor__(_query_compiler=self._query_compiler.invert())
+        return self.__constructor__(_data=self._query_compiler.invert())
 
     def __neg__(self) -> "BasePolarsDataset":
-        return self.__constructor__(_query_compiler=self._query_compiler.negative())
+        return self.__constructor__(_data=self._query_compiler.negative())
 
     def __abs__(self) -> "BasePolarsDataset":
-        return self.__constructor__(_query_compiler=self._query_compiler.abs())
+        return self.__constructor__(_data=self._query_compiler.abs())
 
     def is_duplicated(self):
         """
@@ -170,7 +170,7 @@ class BasePolarsDataset:
             DataFrame with True for each duplicate row, and False for unique rows.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.duplicated(keep=False)
+            _data=self._query_compiler.duplicated(keep=False)
         )
 
     def is_empty(self) -> bool:
@@ -190,7 +190,7 @@ class BasePolarsDataset:
             DataFrame with True for each unique row, and False for duplicate rows.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.duplicated(keep=False).invert()
+            _data=self._query_compiler.duplicated(keep=False).invert()
         )
 
     def n_chunks(self, strategy: str = "first") -> int | list[int]:
@@ -278,7 +278,7 @@ class BasePolarsDataset:
             DataFrame with the new dtypes.
         """
         # TODO: support strict
-        return self.__constructor__(_query_compiler=self._query_compiler.astype(dtypes))
+        return self.__constructor__(_data=self._query_compiler.astype(dtypes))
 
     def clone(self) -> "BasePolarsDataset":
         """
@@ -300,7 +300,7 @@ class BasePolarsDataset:
             DataFrame with the rows with null values dropped.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.dropna(subset=subset, how="any")
+            _data=self._query_compiler.dropna(subset=subset, how="any")
         )
 
     def explode(self, columns: str, *more_columns: str) -> "BasePolarsDataset":
@@ -317,7 +317,7 @@ class BasePolarsDataset:
         if len(more_columns) > 0:
             columns = [columns, *more_columns]
         return self.__constructor__(
-            _query_compiler=self._query_compiler.explode(columns)
+            _data=self._query_compiler.explode(columns)
         )
 
     def extend(self, other: "BasePolarsDataset") -> "BasePolarsDataset":
@@ -346,7 +346,7 @@ class BasePolarsDataset:
             DataFrame with NaN values filled.
         """
         # TODO: Handle null values differently than nan.
-        return self.__constructor__(_query_compiler=self._query_compiler.fillna(value))
+        return self.__constructor__(_data=self._query_compiler.fillna(value))
 
     def fill_null(
         self,
@@ -384,7 +384,7 @@ class BasePolarsDataset:
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
         return self.__constructor__(
-            _query_compiler=self._query_compiler.fillna(
+            _data=self._query_compiler.fillna(
                 value=value, method=strategy, limit=limit
             )
         )
@@ -396,7 +396,7 @@ class BasePolarsDataset:
         if constraints:
             raise NotImplementedError("Named constraints are not supported")
         return self.__constructor__(
-            _query_compiler=self._query_compiler.getitem_array(
+            _data=self._query_compiler.getitem_array(
                 predicates._query_compiler
             )
         )
@@ -413,7 +413,7 @@ class BasePolarsDataset:
             DataFrame with every nth row gathered.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.getitem_row_array(
+            _data=self._query_compiler.getitem_row_array(
                 slice(offset, None, n)
             )
         )
@@ -429,7 +429,7 @@ class BasePolarsDataset:
             DataFrame with the first n rows.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.getitem_row_array(slice(0, n))
+            _data=self._query_compiler.getitem_row_array(slice(0, n))
         )
 
     def limit(self, n: int = 10) -> "BasePolarsDataset":
@@ -451,7 +451,7 @@ class BasePolarsDataset:
         Returns:
             DataFrame with the interpolated values.
         """
-        return self.__constructor__(_query_compiler=self._query_compiler.interpolate())
+        return self.__constructor__(_data=self._query_compiler.interpolate())
 
     def sample(
         self,
@@ -476,7 +476,7 @@ class BasePolarsDataset:
             Sampled DataFrame.
         """
         return self.__constructor__(
-            _query_compiler=self.to_pandas()
+            _data=self.to_pandas()
             .sample(n=n, frac=fraction, replace=with_replacement, random_state=seed)
             ._query_compiler
         )
@@ -505,7 +505,7 @@ class BasePolarsDataset:
             Sliced DataFrame.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.getitem_row_array(
+            _data=self._query_compiler.getitem_row_array(
                 slice(offset, offset + length)
             )
         )
@@ -537,7 +537,7 @@ class BasePolarsDataset:
         if len(more_by) > 0:
             by = [by, *more_by]
         return self.__constructor__(
-            _query_compiler=self._query_compiler.sort_rows_by_column_values(
+            _data=self._query_compiler.sort_rows_by_column_values(
                 by=by,
                 reverse=descending,
                 nulls_first=None if nulls_last is None else not nulls_last,
@@ -555,7 +555,7 @@ class BasePolarsDataset:
             DataFrame with the last n rows.
         """
         return self.__constructor__(
-            _query_compiler=self._query_compiler.getitem_row_array(slice(-n, None))
+            _data=self._query_compiler.getitem_row_array(slice(-n, None))
         )
 
     def to_dummies(
@@ -582,7 +582,7 @@ class BasePolarsDataset:
         else:
             columns = self.columns
         result = self.__constructor__(
-            _query_compiler=self._query_compiler.get_dummies(columns)
+            _data=self._query_compiler.get_dummies(columns)
         )
         if separator != "_":
             result.columns = [
@@ -629,7 +629,7 @@ class BasePolarsDataset:
             # TODO: support keep="none"
             raise NotImplementedError("not yet")
         return self.__constructor__(
-            _query_compiler=self._query_compiler.unique(subset=subset)
+            _data=self._query_compiler.unique(subset=subset)
         )
 
     def equals(self, other: "BasePolarsDataset", *, null_equal: bool = True) -> bool:
@@ -665,4 +665,4 @@ class BasePolarsDataset:
         Returns:
             DataFrame with the counts.
         """
-        return self.__constructor__(_query_compiler=self._query_compiler.count(axis=0))
+        return self.__constructor__(_data=self._query_compiler.count(axis=0))

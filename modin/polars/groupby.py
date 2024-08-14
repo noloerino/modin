@@ -57,7 +57,7 @@ class GroupBy:
 
     def first(self) -> "DataFrame":
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_first(
+            _data=self.df._query_compiler.groupby_first(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -72,7 +72,7 @@ class GroupBy:
 
     def head(self, n: int = 5):
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_head(
+            _data=self.df._query_compiler.groupby_head(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -87,7 +87,7 @@ class GroupBy:
 
     def last(self) -> "DataFrame":
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_last(
+            _data=self.df._query_compiler.groupby_last(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -104,7 +104,7 @@ class GroupBy:
         if name is None:
             name = "len"
         result = self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_size(
+            _data=self.df._query_compiler.groupby_size(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -123,7 +123,7 @@ class GroupBy:
 
     def max(self) -> "DataFrame":
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_max(
+            _data=self.df._query_compiler.groupby_max(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -139,7 +139,7 @@ class GroupBy:
     def mean(self) -> "DataFrame":
         # TODO: Non numeric columns are dropped, but in Polars they are converted to null
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_mean(
+            _data=self.df._query_compiler.groupby_mean(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -155,7 +155,7 @@ class GroupBy:
     def median(self) -> "DataFrame":
         # TODO: Non numeric columns are dropped, but in Polars they are converted to null
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_median(
+            _data=self.df._query_compiler.groupby_median(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -170,7 +170,7 @@ class GroupBy:
 
     def min(self) -> "DataFrame":
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_min(
+            _data=self.df._query_compiler.groupby_min(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -185,7 +185,7 @@ class GroupBy:
 
     def n_unique(self) -> "DataFrame":
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_nunique(
+            _data=self.df._query_compiler.groupby_nunique(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -202,7 +202,7 @@ class GroupBy:
         # TODO: Non numeric columns are dropped, but in Polars they are converted to null
         # TODO: interpolation types not yet supported
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_quantile(
+            _data=self.df._query_compiler.groupby_quantile(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -218,7 +218,7 @@ class GroupBy:
     def sum(self) -> "DataFrame":
         # TODO: Non numeric columns are dropped, but in Polars they are converted to null
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_sum(
+            _data=self.df._query_compiler.groupby_sum(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(
@@ -233,7 +233,7 @@ class GroupBy:
 
     def tail(self, n: int = 5):
         return self.df.__constructor__(
-            _query_compiler=self.df._query_compiler.groupby_tail(
+            _data=self.df._query_compiler.groupby_tail(
                 self.by,
                 axis=0,
                 groupby_kwargs=dict(

@@ -118,10 +118,10 @@ def _read(**kwargs):
     if isinstance(pd_obj, TextFileReader):
         reader = pd_obj.read
         pd_obj.read = lambda *args, **kwargs: ModinObjects.DataFrame(
-            query_compiler=reader(*args, **kwargs)
+            data=reader(*args, **kwargs)
         )
         return pd_obj
-    result = ModinObjects.DataFrame(query_compiler=pd_obj)
+    result = ModinObjects.DataFrame(data=pd_obj)
     if squeeze:
         return result.squeeze(axis=1)
     return result
@@ -322,7 +322,7 @@ def read_parquet(
         )
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_parquet(
+        data=FactoryDispatcher.read_parquet(
             path=path,
             engine=engine,
             columns=columns,
@@ -364,7 +364,7 @@ def read_json(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.read_json(**kwargs))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_json(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_gbq, apilink="pandas.read_gbq")
@@ -389,7 +389,7 @@ def read_gbq(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.read_gbq(**kwargs))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_gbq(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_html, apilink="pandas.read_html")
@@ -424,7 +424,7 @@ def read_html(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     qcs = FactoryDispatcher.read_html(**kwargs)
-    return [ModinObjects.DataFrame(query_compiler=qc) for qc in qcs]
+    return [ModinObjects.DataFrame(data=qc) for qc in qcs]
 
 
 @_inherit_docstrings(pandas.read_clipboard, apilink="pandas.read_clipboard")
@@ -443,7 +443,7 @@ def read_clipboard(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_clipboard(**kwargs)
+        data=FactoryDispatcher.read_clipboard(**kwargs)
     )
 
 
@@ -490,10 +490,10 @@ def read_excel(
     if isinstance(intermediate, dict):
         parsed = type(intermediate)()
         for key in intermediate.keys():
-            parsed[key] = ModinObjects.DataFrame(query_compiler=intermediate.get(key))
+            parsed[key] = ModinObjects.DataFrame(data=intermediate.get(key))
         return parsed
     else:
-        return ModinObjects.DataFrame(query_compiler=intermediate)
+        return ModinObjects.DataFrame(data=intermediate)
 
 
 @_inherit_docstrings(pandas.read_hdf, apilink="pandas.read_hdf")
@@ -520,7 +520,7 @@ def read_hdf(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.read_hdf(**kwargs))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_hdf(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_feather, apilink="pandas.read_feather")
@@ -538,7 +538,7 @@ def read_feather(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_feather(**kwargs)
+        data=FactoryDispatcher.read_feather(**kwargs)
     )
 
 
@@ -564,7 +564,7 @@ def read_stata(
 
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.read_stata(**kwargs))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_stata(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_sas, apilink="pandas.read_sas")
@@ -586,7 +586,7 @@ def read_sas(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_sas(
+        data=FactoryDispatcher.read_sas(
             filepath_or_buffer=filepath_or_buffer,
             format=format,
             index=index,
@@ -611,7 +611,7 @@ def read_pickle(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_pickle(**kwargs)
+        data=FactoryDispatcher.read_pickle(**kwargs)
     )
 
 
@@ -640,10 +640,10 @@ def read_sql(
         ErrorMessage.default_to_pandas("Parameters provided [chunksize]")
         df_gen = pandas.read_sql(**kwargs)
         return (
-            ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_pandas(df))
+            ModinObjects.DataFrame(data=FactoryDispatcher.from_pandas(df))
             for df in df_gen
         )
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.read_sql(**kwargs))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.read_sql(**kwargs))
 
 
 @_inherit_docstrings(pandas.read_fwf, apilink="pandas.read_fwf")
@@ -676,10 +676,10 @@ def read_fwf(
     if isinstance(pd_obj, TextFileReader):
         reader = pd_obj.read
         pd_obj.read = lambda *args, **kwargs: ModinObjects.DataFrame(
-            query_compiler=reader(*args, **kwargs)
+            data=reader(*args, **kwargs)
         )
         return pd_obj
-    return ModinObjects.DataFrame(query_compiler=pd_obj)
+    return ModinObjects.DataFrame(data=pd_obj)
 
 
 @_inherit_docstrings(pandas.read_sql_table, apilink="pandas.read_sql_table")
@@ -703,7 +703,7 @@ def read_sql_table(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_sql_table(**kwargs)
+        data=FactoryDispatcher.read_sql_table(**kwargs)
     )
 
 
@@ -725,7 +725,7 @@ def read_sql_query(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_sql_query(**kwargs)
+        data=FactoryDispatcher.read_sql_query(**kwargs)
     )
 
 
@@ -767,7 +767,7 @@ def read_spss(
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.read_spss(
+        data=FactoryDispatcher.read_spss(
             path=path,
             usecols=usecols,
             convert_categoricals=convert_categoricals,
@@ -971,7 +971,7 @@ def from_non_pandas(df, index, columns, dtype) -> DataFrame | None:
 
     new_qc = FactoryDispatcher.from_non_pandas(df, index, columns, dtype)
     if new_qc is not None:
-        return ModinObjects.DataFrame(query_compiler=new_qc)
+        return ModinObjects.DataFrame(data=new_qc)
     return new_qc
 
 
@@ -991,7 +991,7 @@ def from_pandas(df) -> DataFrame:
     """
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_pandas(df))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.from_pandas(df))
 
 
 def from_arrow(at) -> DataFrame:
@@ -1010,7 +1010,7 @@ def from_arrow(at) -> DataFrame:
     """
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_arrow(at))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.from_arrow(at))
 
 
 def from_dataframe(df) -> DataFrame:
@@ -1031,7 +1031,7 @@ def from_dataframe(df) -> DataFrame:
     """
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_dataframe(df))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.from_dataframe(df))
 
 
 def from_ray(ray_obj) -> DataFrame:
@@ -1054,7 +1054,7 @@ def from_ray(ray_obj) -> DataFrame:
     """
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_ray(ray_obj))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.from_ray(ray_obj))
 
 
 def from_dask(dask_obj) -> DataFrame:
@@ -1077,7 +1077,7 @@ def from_dask(dask_obj) -> DataFrame:
     """
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
-    return ModinObjects.DataFrame(query_compiler=FactoryDispatcher.from_dask(dask_obj))
+    return ModinObjects.DataFrame(data=FactoryDispatcher.from_dask(dask_obj))
 
 
 def from_map(func, iterable, *args, **kwargs) -> DataFrame:
@@ -1106,7 +1106,7 @@ def from_map(func, iterable, *args, **kwargs) -> DataFrame:
     from modin.core.execution.dispatching.factories.dispatcher import FactoryDispatcher
 
     return ModinObjects.DataFrame(
-        query_compiler=FactoryDispatcher.from_map(func, iterable, *args, *kwargs)
+        data=FactoryDispatcher.from_map(func, iterable, *args, *kwargs)
     )
 
 
