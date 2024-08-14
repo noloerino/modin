@@ -43,7 +43,6 @@ from modin.utils import (
 
 from .accessor import CachedAccessor, SparseAccessor
 from .base import _ATTRS_NO_LOOKUP, BasePandasDataset
-from .dataframe import DataFrame
 from .iterator import PartitionIterator
 from .series_utils import (
     CategoryMethods,
@@ -56,6 +55,8 @@ from .utils import _doc_binary_op, cast_function_modin2pandas, is_scalar
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+
+    from .dataframe import DataFrame
 
 # Dictionary of extensions assigned to this class
 _SERIES_EXTENSIONS_ = {}
@@ -166,6 +167,8 @@ class Series(BasePandasDataset):
         This method is called during initialization to construct a Series from another
         Modin object.
         """
+        from .dataframe import DataFrame
+
         if isinstance(data, type(self)):
             query_compiler = data._query_compiler.copy()
             if index is not None:
