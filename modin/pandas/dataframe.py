@@ -144,45 +144,17 @@ class DataFrame(BasePandasDataset):
         columns=None,
         dtype=None,
         copy=None,
-        query_compiler: BaseQueryCompiler = None,
     ) -> None:
         from modin.numpy import array
 
         # Siblings are other dataframes that share the same query compiler. We
         # use this list to update inplace when there is a shallow copy.
         self._siblings = []
-        if isinstance(data, (DataFrame, Series)):
-            self._query_compiler = data._query_compiler.copy()
-            if index is not None and any(i not in data.index for i in index):
-                raise NotImplementedError(
-                    "Passing non-existant columns or index values to constructor not"
-                    + " yet implemented."
-                )
-            if isinstance(data, Series):
-                # We set the column name if it is not in the provided Series
-                if data.name is None:
-                    self.columns = [0] if columns is None else columns
-                # If the columns provided are not in the named Series, pandas clears
-                # the DataFrame and sets columns to the columns provided.
-                elif columns is not None and data.name not in columns:
-                    self._query_compiler = from_pandas(
-                        pandas.DataFrame(columns=columns)
-                    )._query_compiler
-                if index is not None:
-                    self._query_compiler = data.loc[index]._query_compiler
-            elif columns is None and index is None:
-                data._add_sibling(self)
-            else:
-                if columns is not None and any(i not in data.columns for i in columns):
-                    raise NotImplementedError(
-                        "Passing non-existant columns or index values to constructor not"
-                        + " yet implemented."
-                    )
-                if index is None:
-                    index = slice(None)
-                if columns is None:
-                    columns = slice(None)
-                self._query_compiler = data.loc[index, columns]._query_compiler
+        query_compiler = None
+        if isinstance(data, BaseQueryCompiler):
+            _query_compiler = data
+        elif hasattr(data, "_query_compiler"):
+            _query_compiler = DataFrame._get_query_compiler_from_modin_object(data, index, columns)
         elif isinstance(data, array):
             self._query_compiler = data._query_compiler.copy()
             if copy is not None and not copy:
@@ -259,6 +231,52 @@ class DataFrame(BasePandasDataset):
             self._query_compiler = from_pandas(pandas_df)._query_compiler
         else:
             self._query_compiler = query_compiler
+
+    @classmethod
+    def _get_query_compiler_from_modin_object(cls, data, index=None, columns=None) -> BaseQueryCompiler:
+        """
+        Process a query compiler from `data`, which has a `_query_compiler` attribute.
+
+        This method is called during initialization to construct a DataFrame from another
+        Modin object.
+        """
+        if isinstance(data, (DataFrame, Series)):
+            _query_compiler = data._query_compiler.copy()
+            if index is not None and any(i not in data.index for i in index):
+                raise NotImplementedError(
+                    "Passing non-existant columns or index values to constructor not"
+                    + " yet implemented."
+                )
+            if isinstance(data, Series):
+                # We set the column name if it is not in the provided Series
+                if data.name is None:
+                    _query_compiler.columns = [0] if columns is None else columns
+                # If the columns provided are not in the named Series, pandas clears
+                # the DataFrame and sets columns to the columns provided.
+                elif columns is not None and data.name not in columns:
+                    _query_compiler = from_pandas(
+                        pandas.DataFrame(columns=columns)
+                    )._query_compiler
+                if index is not None:
+                    _query_compiler = data.loc[index]._query_compiler
+            elif columns is None and index is None:
+                data._add_sibling(self)
+            else:
+                if columns is not None and any(i not in data.columns for i in columns):
+                    raise NotImplementedError(
+                        "Passing non-existant columns or index values to constructor not"
+                        + " yet implemented."
+                    )
+                if index is None:
+                    index = slice(None)
+                if columns is None:
+                    columns = slice(None)
+                _query_compiler = data.loc[index, columns]._query_compiler
+            return _query_compiler
+        else:
+            raise ValueError(
+                f"Cannot construct DataFrame from object of type {type(data)}"
+            )
 
     def __repr__(self) -> str:
         """

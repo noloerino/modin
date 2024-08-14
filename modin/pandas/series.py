@@ -32,6 +32,7 @@ from pandas.io.formats.info import SeriesInfo
 from pandas.util._validators import validate_bool_kwarg
 
 from modin.config import PersistentPickle
+from modin.core.storage_formats import BaseQueryCompiler
 from modin.logging import disable_logging
 from modin.pandas.io import from_pandas, to_pandas
 from modin.utils import (
@@ -55,7 +56,6 @@ from .utils import _doc_binary_op, cast_function_modin2pandas, is_scalar
 if TYPE_CHECKING:
     import numpy.typing as npt
 
-    from modin.core.storage_formats import BaseQueryCompiler
 
     from .dataframe import DataFrame
 
@@ -107,22 +107,17 @@ class Series(BasePandasDataset):
         name=None,
         copy=None,
         fastpath=lib.no_default,
-        query_compiler: BaseQueryCompiler = None,
     ) -> None:
         from modin.numpy import array
 
         # Siblings are other dataframes that share the same query compiler. We
         # use this list to update inplace when there is a shallow copy.
         self._siblings = []
-        if isinstance(data, type(self)):
-            query_compiler = data._query_compiler.copy()
-            if index is not None:
-                if any(i not in data.index for i in index):
-                    raise NotImplementedError(
-                        "Passing non-existent columns or index values to constructor "
-                        + "not yet implemented."
-                    )
-                query_compiler = data.loc[index]._query_compiler
+        query_compiler = None
+        if isinstance(data, BaseQueryCompiler):
+            query_compiler = data
+        if hasattr(data, "_query_compiler"):
+            query_compiler = Series._get_query_compiler_from_modin_object(data, index)
         if isinstance(data, array):
             if data._ndim == 2:
                 raise ValueError("Data must be 1-dimensional")
@@ -162,6 +157,34 @@ class Series(BasePandasDataset):
         self._query_compiler = query_compiler.columnarize()
         if name is not None:
             self.name = name
+
+    @classmethod
+    def _get_query_compiler_from_modin_object(cls, data, index=None) -> BaseQueryCompiler:
+        """
+        Process a query compiler from `data`, which has a `_query_compiler` attribute.
+
+        This method is called during initialization to construct a Series from another
+        Modin object.
+        """
+        if isinstance(data, cls):
+            query_compiler = data._query_compiler.copy()
+            if index is not None:
+                if any(i not in data.index for i in index):
+                    raise NotImplementedError(
+                        "Passing non-existent columns or index values to constructor "
+                        + "not yet implemented."
+                    )
+                query_compiler = data.loc[index]._query_compiler
+            return query_compiler
+        elif isinstance(data, pd.DataFrame):
+            # data is a DataFrame
+            raise ValueError(
+                f"Data must be 1-dimensional, got ndarray of shape {data.shape} instead"
+            )
+        else:
+            raise ValueError(
+                f"Cannot construct Series from object of type {type(data)}"
+            )
 
     def _get_name(self) -> Hashable:
         """
