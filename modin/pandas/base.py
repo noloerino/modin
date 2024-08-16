@@ -125,6 +125,7 @@ _DEFAULT_BEHAVIOUR = {
     "_set_name",
     "_default_to_pandas",
     "_query_compiler",
+    "_get_query_compiler_from_modin_object",
     "_to_pandas",
     "_repartition",
     "_build_repr_df",
