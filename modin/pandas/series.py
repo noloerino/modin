@@ -157,7 +157,6 @@ class Series(BasePandasDataset):
         if name is not None:
             self.name = name
 
-    @classmethod
     def _get_query_compiler_from_modin_object(
         self, data, index=None
     ) -> BaseQueryCompiler:
