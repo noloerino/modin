@@ -235,7 +235,7 @@ class DataFrame(BasePandasDataset):
             _query_compiler = data._query_compiler.copy()
             if index is not None and any(i not in data.index for i in index):
                 raise NotImplementedError(
-                    "Passing non-existant columns or index values to constructor not"
+                    "Passing non-existent columns or index values to constructor not"
                     + " yet implemented."
                 )
             if isinstance(data, Series):
@@ -255,7 +255,7 @@ class DataFrame(BasePandasDataset):
             else:
                 if columns is not None and any(i not in data.columns for i in columns):
                     raise NotImplementedError(
-                        "Passing non-existant columns or index values to constructor not"
+                        "Passing non-existent columns or index values to constructor not"
                         + " yet implemented."
                     )
                 if index is None:

@@ -110,6 +110,7 @@ _ATTRS_NO_LOOKUP = {
 _DEFAULT_BEHAVIOUR = {
     "__init__",
     "__class__",
+    "_siblings",
     "_get_index",
     "_set_index",
     "_pandas_class",
