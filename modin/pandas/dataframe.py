@@ -3199,7 +3199,7 @@ class DataFrame(BasePandasDataset):
         -------
         Series of datetime64 dtype
         """
-        return self._reduce_dimension(data=self._query_compiler.to_datetime(**kwargs))
+        return self._reduce_dimension(query_compiler=self._query_compiler.to_datetime(**kwargs))
 
     def _getitem(self, key) -> Union[DataFrame, Series]:
         """
