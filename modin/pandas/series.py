@@ -995,7 +995,7 @@ class Series(BasePandasDataset):
             qc = other.reindex(index=common)._query_compiler
             if isinstance(other, Series):
                 return self._reduce_dimension(
-                    data=self._query_compiler.dot(
+                    query_compiler=self._query_compiler.dot(
                         qc, squeeze_self=True, squeeze_other=True
                     )
                 )
@@ -1018,7 +1018,7 @@ class Series(BasePandasDataset):
             )
 
         return self._reduce_dimension(
-            data=self._query_compiler.dot(other, squeeze_self=True)
+            query_compiler=self._query_compiler.dot(other, squeeze_self=True)
         )
 
     def drop_duplicates(
