@@ -94,16 +94,16 @@ class DataFrame(BasePolarsDataset):
             missing = [i for i in item if i not in self.columns]
             if len(missing) > 0:
                 raise polars.exceptions.ColumnNotFoundError(missing[0])
-            return self.__constructor__(_data=self._query_compiler.getitem_array(item))
+            return self.__constructor__(_query_compiler=self._query_compiler.getitem_array(item))
         else:
             if item not in self.columns:
                 raise polars.exceptions.ColumnNotFoundError(item)
             from .series import Series
 
-            return Series(_data=self._query_compiler.getitem_array([item]))
+            return Series(_query_compiler=self._query_compiler.getitem_array([item]))
 
     def _copy(self):
-        return self.__constructor__(_data=self._query_compiler.copy())
+        return self.__constructor__(_query_compiler=self._query_compiler.copy())
 
     def _to_polars(self) -> polars.DataFrame:
         """
@@ -231,7 +231,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the maximum values.
         """
         if axis is None or axis == 0:
-            return self.__constructor__(_data=self._query_compiler.max(axis=0))
+            return self.__constructor__(_query_compiler=self._query_compiler.max(axis=0))
         else:
             return self.max_horizontal()
 
@@ -242,7 +242,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the maximum values.
         """
-        return self.__constructor__(_data=self._query_compiler.max(axis=1))
+        return self.__constructor__(_query_compiler=self._query_compiler.max(axis=1))
 
     def _convert_non_numeric_to_null(self):
         """
@@ -258,7 +258,7 @@ class DataFrame(BasePolarsDataset):
         ]
         if len(non_numeric_cols) > 0:
             return self.__constructor__(
-                _data=self._query_compiler.write_items(
+                _query_compiler=self._query_compiler.write_items(
                     slice(None),
                     [self.columns.index(c) for c in non_numeric_cols],
                     pandas.NA,
@@ -282,7 +282,7 @@ class DataFrame(BasePolarsDataset):
         obj = self._convert_non_numeric_to_null()
         if axis is None or axis == 0:
             return self.__constructor__(
-                _data=obj._query_compiler.mean(
+                _query_compiler=obj._query_compiler.mean(
                     axis=0,
                     skipna=True if null_strategy == "ignore" else False,
                 )
@@ -300,7 +300,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the median of each column.
         """
         return self.__constructor__(
-            _data=self._convert_non_numeric_to_null()._query_compiler.median(0)
+            _query_compiler=self._convert_non_numeric_to_null()._query_compiler.median(0)
         )
 
     def mean_horizontal(self, *, ignore_nulls: bool = True):
@@ -315,7 +315,7 @@ class DataFrame(BasePolarsDataset):
         """
         obj = self._convert_non_numeric_to_null()
         return self.__constructor__(
-            _data=obj._query_compiler.mean(axis=1, skipna=ignore_nulls)
+            _query_compiler=obj._query_compiler.mean(axis=1, skipna=ignore_nulls)
         )
 
     def min(self, axis=None):
@@ -329,7 +329,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the minimum values of each row or column.
         """
         if axis is None or axis == 0:
-            return self.__constructor__(_data=self._query_compiler.min(axis=0))
+            return self.__constructor__(_query_compiler=self._query_compiler.min(axis=0))
         else:
             return self.max_horizontal()
 
@@ -340,7 +340,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the minimum values of each row.
         """
-        return self.__constructor__(_data=self._query_compiler.min(axis=1))
+        return self.__constructor__(_query_compiler=self._query_compiler.min(axis=1))
 
     def product(self):
         """
@@ -350,7 +350,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the product of each column.
         """
         obj = self._convert_non_numeric_to_null()
-        return self.__constructor__(_data=obj._query_compiler.prod(axis=0))
+        return self.__constructor__(_query_compiler=obj._query_compiler.prod(axis=0))
 
     def quantile(self, quantile: float, interpolation="nearest"):
         """
@@ -366,7 +366,7 @@ class DataFrame(BasePolarsDataset):
         obj = self._convert_non_numeric_to_null()
         # TODO: interpolation support
         return self.__constructor__(
-            _data=obj._query_compiler.quantile_for_single_value(quantile)
+            _query_compiler=obj._query_compiler.quantile_for_single_value(quantile)
         )
 
     def std(self, ddof: int = 1):
@@ -380,7 +380,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the standard deviation of each column
         """
         obj = self._convert_non_numeric_to_null()
-        return self.__constructor__(_data=obj._query_compiler.std(ddof=ddof))
+        return self.__constructor__(_query_compiler=obj._query_compiler.std(ddof=ddof))
 
     def sum(self, axis: int | None = None, null_strategy="ignore"):
         """
@@ -396,7 +396,7 @@ class DataFrame(BasePolarsDataset):
         obj = self._convert_non_numeric_to_null()
         if axis is None or axis == 0:
             return self.__constructor__(
-                _data=obj._query_compiler.sum(
+                _query_compiler=obj._query_compiler.sum(
                     axis=0,
                     skipna=True if null_strategy == "ignore" else False,
                 )
@@ -420,7 +420,7 @@ class DataFrame(BasePolarsDataset):
         # this behavior may not be intended so doing this instead (for now)
         obj = self._convert_non_numeric_to_null()
         return self.__constructor__(
-            _data=obj._query_compiler.sum(axis=1, skipna=ignore_nulls)
+            _query_compiler=obj._query_compiler.sum(axis=1, skipna=ignore_nulls)
         )
 
     def var(self, ddof: int = 1):
@@ -434,7 +434,7 @@ class DataFrame(BasePolarsDataset):
             DataFrame with the variance of each column.
         """
         obj = self._convert_non_numeric_to_null()
-        return self.__constructor__(_data=obj._query_compiler.var(ddof=ddof))
+        return self.__constructor__(_query_compiler=obj._query_compiler.var(ddof=ddof))
 
     def approx_n_unique(self):
         """
@@ -443,7 +443,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the approximate number of unique values in each column.
         """
-        return self.__constructor__(_data=self._query_compiler.nunique())
+        return self.__constructor__(_query_compiler=self._query_compiler.nunique())
 
     def describe(self, percentiles: Sequence[float] | float = (0.25, 0.5, 0.75)):
         """
@@ -457,7 +457,7 @@ class DataFrame(BasePolarsDataset):
         """
         return self.__constructor__(
             self.__constructor__(
-                _data=self._query_compiler.describe(
+                _query_compiler=self._query_compiler.describe(
                     percentiles=np.array(percentiles)
                 ).astype(
                     {
@@ -495,7 +495,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the extimated memory usage.
         """
-        return self.__constructor__(_data=self._query_compiler.memory_usage())
+        return self.__constructor__(_query_compiler=self._query_compiler.memory_usage())
 
     def glimpse(
         self,
@@ -529,7 +529,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the number of null values in each column.
         """
-        return self.__constructor__(_data=self._query_compiler.isna().sum(axis=0))
+        return self.__constructor__(_query_compiler=self._query_compiler.isna().sum(axis=0))
 
     def to_pandas(self):
         """
@@ -577,7 +577,7 @@ class DataFrame(BasePolarsDataset):
                 if c not in self.columns:
                     raise KeyError(c)
         columns = list(columns) if not isinstance(columns[0], list) else columns[0]
-        return self.__constructor__(_data=self._query_compiler.drop(columns))
+        return self.__constructor__(_query_compiler=self._query_compiler.drop(columns))
 
     def drop_in_place(self, name: str) -> "DataFrame":
         """
@@ -662,7 +662,7 @@ class DataFrame(BasePolarsDataset):
         if inplace:
             self._query_compiler = result_query_compiler
             return self
-        return self.__constructor__(_data=result_query_compiler)
+        return self.__constructor__(_query_compiler=result_query_compiler)
 
     def insert_column(self, index: int, column: "Series") -> "DataFrame":
         """
@@ -774,7 +774,7 @@ class DataFrame(BasePolarsDataset):
         elif how == "anti":
             raise NotImplementedError("not yet")
         return self.__constructor__(
-            _data=self._query_compiler.merge(
+            _query_compiler=self._query_compiler.merge(
                 other._query_compiler,
                 on=on,
                 how=how,
@@ -821,7 +821,7 @@ class DataFrame(BasePolarsDataset):
         if by is not None and by_left is None and by_right is None:
             by_left = by_right = by
         return self.__constructor__(
-            _data=self._query_compiler.merge_asof(
+            _query_compiler=self._query_compiler.merge_asof(
                 other._query_compiler,
                 left_on=left_on,
                 right_on=right_on,
@@ -853,7 +853,7 @@ class DataFrame(BasePolarsDataset):
             Melted DataFrame.
         """
         return self.__constructor__(
-            _data=self._query_compiler.melt(
+            _query_compiler=self._query_compiler.melt(
                 id_vars=id_vars,
                 value_vars=value_vars,
                 var_name=variable_name,
@@ -934,7 +934,7 @@ class DataFrame(BasePolarsDataset):
         """
         # TODO: handle maintain_order, sort_columns, separator
         return self.__constructor__(
-            _data=self._query_compiler.pivot(
+            _query_compiler=self._query_compiler.pivot(
                 values=values,
                 index=index,
                 columns=columns,
@@ -995,7 +995,7 @@ class DataFrame(BasePolarsDataset):
             Reversed DataFrame.
         """
         return self.__constructor__(
-            _data=self._query_compiler.getitem_row_array(slice(None, None, -1))
+            _query_compiler=self._query_compiler.getitem_row_array(slice(None, None, -1))
         )
 
     def rolling(self, index_column, *, period, offset, closed, group_by, check_sorted):
@@ -1104,7 +1104,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             Transposed DataFrame.
         """
-        result = self.__constructor__(_data=self._query_compiler.transpose())
+        result = self.__constructor__(_query_compiler=self._query_compiler.transpose())
         if column_names is not None:
             result.columns = column_names
         elif include_header:
@@ -1197,7 +1197,7 @@ class DataFrame(BasePolarsDataset):
             return self
         else:
             return self.__constructor__(
-                _data=self._query_compiler.concat(axis=0, other=other._query_compiler)
+                _query_compiler=self._query_compiler.concat(axis=0, other=other._query_compiler)
             )
 
     def with_columns(self, *exprs, **named_exprs) -> "DataFrame":
@@ -1223,7 +1223,7 @@ class DataFrame(BasePolarsDataset):
             obj = self._copy()
             obj.index = obj.index + offset
         result = self.__constructor__(
-            _data=self._query_compiler.reset_index(drop=False)
+            _query_compiler=self._query_compiler.reset_index(drop=False)
         )
         result.columns = [name, *self.columns]
         return result
@@ -1244,7 +1244,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the function applied.
         """
-        return self.__constructor__(_data=self._query_compiler.apply(function, axis=1))
+        return self.__constructor__(_query_compiler=self._query_compiler.apply(function, axis=1))
 
     def corr(self, **kwargs: Any) -> "DataFrame":
         """
@@ -1253,7 +1253,7 @@ class DataFrame(BasePolarsDataset):
         Returns:
             DataFrame with the correlation.
         """
-        return self.__constructor__(_data=self._query_compiler.corr(**kwargs))
+        return self.__constructor__(_query_compiler=self._query_compiler.corr(**kwargs))
 
     def lazy(self) -> "LazyFrame":
         """
@@ -1369,7 +1369,7 @@ class DataFrame(BasePolarsDataset):
             Unpivoted DataFrame.
         """
         return self.__constructor__(
-            _data=self._query_compiler.melt(
+            _query_compiler=self._query_compiler.melt(
                 on=on,
                 index=index,
                 var_name=variable_name,
