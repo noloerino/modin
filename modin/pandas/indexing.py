@@ -790,7 +790,7 @@ class _LocIndexer(_LocationIndexerBase):
                 return df
 
             self.df._update_inplace(
-                new_data=self.df._default_to_pandas(_loc)._query_compiler
+                new_query_compiler=self.df._default_to_pandas(_loc)._query_compiler
             )
             return
         row_loc, col_loc, ndims = self._parse_row_and_column_locators(key)
@@ -807,7 +807,7 @@ class _LocIndexer(_LocationIndexerBase):
                 if is_scalar(row_loc) or len(row_loc) == 1:
                     index = self.qc.index.insert(len(self.qc.index), row_loc)
                     self.qc = self.qc.reindex(labels=index, axis=0, fill_value=0)
-                    self.df._update_inplace(new_data=self.qc)
+                    self.df._update_inplace(new_query_compiler=self.qc)
                 self._set_item_existing_loc(row_loc, col_loc, item)
         else:
             self._set_item_existing_loc(row_loc, col_loc, item)
@@ -845,7 +845,7 @@ class _LocIndexer(_LocationIndexerBase):
                 if not common_label_loc[i]:
                     columns = columns.insert(len(columns), col_loc[i])
             self.qc = self.qc.reindex(labels=columns, axis=1, fill_value=np.nan)
-            self.df._update_inplace(new_data=self.qc)
+            self.df._update_inplace(new_query_compiler=self.qc)
         self._set_item_existing_loc(row_loc, np.array(col_loc), item)
 
     def _set_item_existing_loc(self, row_loc, col_loc, item):
@@ -1061,7 +1061,7 @@ class _iLocIndexer(_LocationIndexerBase):
                 return df
 
             self.df._update_inplace(
-                new_data=self.df._default_to_pandas(_iloc)._query_compiler
+                new_query_compiler=self.df._default_to_pandas(_iloc)._query_compiler
             )
             return
         row_loc, col_loc, _ = self._parse_row_and_column_locators(key)

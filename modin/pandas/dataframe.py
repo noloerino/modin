@@ -794,7 +794,7 @@ class DataFrame(BasePandasDataset):
                 )
             else:
                 return self._reduce_dimension(
-                    data=self._query_compiler.dot(
+                    query_compiler=self._query_compiler.dot(
                         qc, squeeze_self=False, squeeze_other=True
                     )
                 )
@@ -811,7 +811,7 @@ class DataFrame(BasePandasDataset):
             )
 
         return self._reduce_dimension(
-            data=self._query_compiler.dot(other, squeeze_self=False)
+            query_compiler=self._query_compiler.dot(other, squeeze_self=False)
         )
 
     def eq(
@@ -1478,7 +1478,7 @@ class DataFrame(BasePandasDataset):
             is_multiindex and is_list_like(level) and len(level) == self.index.nlevels
         ):
             return self._reduce_dimension(
-                data=self._query_compiler.unstack(level, fill_value)
+                query_compiler=self._query_compiler.unstack(level, fill_value)
             )
         else:
             return self.__constructor__(
@@ -2110,7 +2110,7 @@ class DataFrame(BasePandasDataset):
             is_multiindex and is_list_like(level) and len(level) == self.columns.nlevels
         ):
             return self._reduce_dimension(
-                data=self._query_compiler.stack(level, dropna)
+                query_compiler=self._query_compiler.stack(level, dropna)
             )
         else:
             return self.__constructor__(data=self._query_compiler.stack(level, dropna))
