@@ -617,18 +617,8 @@ def s3_resource(s3_base):
     conn = boto3.resource("s3", endpoint_url=s3_base)
     cli = boto3.client("s3", endpoint_url=s3_base)
 
-    # https://github.com/getmoto/moto/issues/3292
-    # without location, I get
-    # botocore.exceptions.ClientError: An error occurred
-    # (IllegalLocationConstraintException) when calling the CreateBucket operation:
-    # The unspecified location constraint is incompatible for the region specific
-    # endpoint this request was sent to.
-    # even if I delete os.environ['AWS_REGION'] but somehow pandas can get away with
-    # this.
     try:
-        cli.create_bucket(
-            Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "us-west-2"}
-        )
+        cli.create_bucket(Bucket=bucket)
     except Exception as e:
         # OK if bucket already exists, but want to raise other exceptions.
         # The exception raised by `create_bucket` is made using a factory,
